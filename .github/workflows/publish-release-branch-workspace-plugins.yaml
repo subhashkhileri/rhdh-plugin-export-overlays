@@ -1,0 +1,19 @@
+name: Publish RHDH Release Dynamic Plugin Images 
+on:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow_ref }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export:
+    uses: davidfestal/rhdh-plugin-export-utils/.github/workflows/export-workspaces-as-dynamic.yaml@multi-plugins-repo
+    with:
+      publish-container: true
+      image-repository-prefix: ghcr.io/${{ github.repository }}
+    permissions:
+      contents: write
+      attestations: write
+      packages: write
+      id-token: write
