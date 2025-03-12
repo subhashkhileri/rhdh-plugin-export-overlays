@@ -15,8 +15,8 @@ on:
         required: false
         default: false
   
-#  schedule:
-#    - cron: '0 12 * * *'    
+  schedule:
+    - cron: '0 12 * * *'
 
 concurrency:
   group: ${{ github.workflow }}
@@ -54,8 +54,8 @@ jobs:
       regexps: ${{ needs.prepare.outputs.regexps }}
       overlay-repo: ${{ github.repository }}      
       release-branch-prefix: release-
-      verbose: ${{ inputs.verbose }}
-      debug: ${{ inputs.debug }}
+      verbose: ${{ inputs.verbose != '' && inputs.verbose }}
+      debug: ${{ inputs.debug != '' && inputs.debug }}
     permissions:
       contents: write
       pull-requests: write
