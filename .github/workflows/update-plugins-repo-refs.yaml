@@ -1,0 +1,62 @@
+name: Update plugins repository references
+on:
+  workflow_dispatch:
+    inputs:
+      regexps:
+        type: string
+        required: false
+        default: ""        
+      verbose:
+        type: boolean
+        required: false
+        default: false        
+      debug:
+        type: boolean
+        required: false
+        default: false
+  
+#  schedule:
+#    - cron: '0 12 * * *'    
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    name: Prepare 
+    outputs:
+      regexps: ${{ steps.read-regexps.outputs.regexps }}
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Read Regexps
+        id: read-regexps
+        shell: bash
+        run: |
+            regexps="${{ inputs.regexps }}"
+            if [[ "${regexps}" == "" ]]
+            then
+              regexps="$(cat plugins-regexps)"
+            fi
+            echo "Regexps of plugins to export:"
+            echo "$regexps"
+            echo "regexps=$(echo $regexps | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+  update:
+    name: Update
+    needs: prepare
+    uses: davidfestal/rhdh-plugin-export-utils/.github/workflows/update-plugins-repo-refs.yaml@multi-plugins-repo
+    with:
+      regexps: ${{ needs.prepare.outputs.regexps }}
+      overlay-repo: ${{ github.repository }}      
+      release-branch-prefix: release-
+      verbose: ${{ inputs.verbose }}
+      debug: ${{ inputs.debug }}
+    permissions:
+      contents: write
+      pull-requests: write
+
