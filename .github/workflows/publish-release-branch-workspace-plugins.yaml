@@ -55,7 +55,7 @@ jobs:
             core.setOutput('last-published-commit', '');
             
   export:
-    uses: davidfestal/rhdh-plugin-export-utils/.github/workflows/export-workspaces-as-dynamic.yaml@multi-plugins-repo
+    uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/export-workspaces-as-dynamic.yaml@main
     needs:
       - prepare
 
