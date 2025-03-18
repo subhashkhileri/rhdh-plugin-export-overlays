@@ -61,9 +61,13 @@ jobs:
 
     with:
       publish-container: true
-      image-repository-prefix: ghcr.io/${{ github.repository }}
+      image-repository-prefix: ${{ format('ghcr.io/{0}', github.repository) }}
       last-publish-commit: ${{ needs.prepare.outputs.last-published-commit }}
 
+    secrets:
+      image-registry-user: ${{ github.actor }}
+      image-registry-password: ${{ secrets.GITHUB_TOKEN }}
+  
     permissions:
       contents: write
       attestations: write

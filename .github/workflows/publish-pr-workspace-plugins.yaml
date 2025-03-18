@@ -17,6 +17,7 @@ jobs:
       overlay-branch: ${{ steps.get-branch.outputs.overlay-branch }}
       overlay-commit: ${{ steps.get-branch.outputs.overlay-commit }}
       workspace: ${{ steps.get-branch.outputs.workspace }}
+      pr-number: ${{ steps.get-branch.outputs.pr-number }}
 
     permissions:
       statuses: write
@@ -34,6 +35,8 @@ jobs:
             });
             const prBranch = currentPullRequest.data.head.ref;
             core.setOutput('overlay-branch', prBranch);
+            const prNumber = currentPullRequest.data.number;
+            core.setOutput('pr-number', prNumber);
             const prCommit = currentPullRequest.data.head.sha;
             core.setOutput('overlay-commit', prCommit);
             let workspace = '';
@@ -87,6 +90,12 @@ jobs:
       overlay-branch: ${{ needs.prepare.outputs.overlay-branch }}
       workspace-path: ${{ needs.prepare.outputs.workspace }}
       publish-container: true
+      image-repository-prefix: ${{ format('ghcr.io/{0}', github.repository) }}
+      image-tag-prefix: ${{ format('pr_{0}__', needs.prepare.outputs.pr-number) }}
+
+    secrets:
+      image-registry-user: ${{ github.actor }}
+      image-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
     permissions:
       contents: write
