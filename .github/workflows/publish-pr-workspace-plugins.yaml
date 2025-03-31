@@ -15,6 +15,7 @@ jobs:
     if: github.event.issue.pull_request && github.event.comment.body == '/publish'
     outputs:
       overlay-branch: ${{ steps.get-branch.outputs.overlay-branch }}
+      overlay-repo: ${{ steps.get-branch.outputs.overlay-repo }}
       overlay-commit: ${{ steps.get-branch.outputs.overlay-commit }}
       workspace: ${{ steps.get-branch.outputs.workspace }}
       pr-number: ${{ steps.get-branch.outputs.pr-number }}
@@ -35,6 +36,8 @@ jobs:
             });
             const prBranch = currentPullRequest.data.head.ref;
             core.setOutput('overlay-branch', prBranch);
+            const prRepo = currentPullRequest.data.head.repo.full_name;
+            core.setOutput('overlay-repo', prRepo);
             const prNumber = currentPullRequest.data.number;
             core.setOutput('pr-number', prNumber);
             const prCommit = currentPullRequest.data.head.sha;
@@ -88,6 +91,7 @@ jobs:
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/export-workspaces-as-dynamic.yaml@main
     with:
       overlay-branch: ${{ needs.prepare.outputs.overlay-branch }}
+      overlay-repo: ${{ needs.prepare.outputs.overlay-repo }}
       workspace-path: ${{ needs.prepare.outputs.workspace }}
       publish-container: true
       image-repository-prefix: ${{ format('ghcr.io/{0}', github.repository) }}
