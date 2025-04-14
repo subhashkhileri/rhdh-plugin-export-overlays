@@ -10,7 +10,7 @@ This repository contains workflows to package Backstage plugins (under the follo
    
    If you can't find a PR for your plugin, you can manually trigger one as explained below.
    
-   #### Create a PR using the "Update plugins repository references" workflow
+   ### Create a PR using the "Update plugins repository references" workflow
 
   > [!IMPORTANT]
   > Write access to this repository is required to run this workflow.
@@ -24,6 +24,22 @@ This repository contains workflows to package Backstage plugins (under the follo
    - The workflow generates PRs against each active release branch corresponding to an RHDH release.
    - For each release branch, it checks for plugin versions compatible with the Backstage version that the release supports.
    - If no compatible version is found, no PR is generated for that plugin on that branch.
+
+### Manually Creating a PR
+
+You can also create PRs manually by referencing existing examples: [View PR examples](https://github.com/redhat-developer/rhdh-plugin-export-overlays/pulls/app%2Fgithub-actions)
+
+To add a new plugin:
+
+1. Create a new workspace in the overlay repository.
+2. Add a `plugins-list.yaml` file that lists all plugins included in the target workspace of the source repository. ([See example](https://github.com/redhat-developer/rhdh-plugin-export-overlays/blob/12acb71a1febc5567c4d12c6a28c0a11ed489273/workspaces/adoption-insights/plugins-list.yaml))
+3. Add a `source.json` file with the following fields ([See example](https://github.com/redhat-developer/rhdh-plugin-export-overlays/blob/12acb71a1febc5567c4d12c6a28c0a11ed489273/workspaces/adoption-insights/source.json))
+:
+   - `repo`: URL of the source repository  
+   - `repo-ref`: Specific tag or commit for the target plugin/workspace version  
+   - `repo-flat`:  
+     - `false` if the plugins are inside a workspace (e.g., `backstage/community-plugins`)  
+     - `true` if the plugins are at the root level (e.g., `backstage/backstage`)
 
 ### 3. Add Additional Dynamic Plugin Export Information (If Needed)
 
