@@ -1,6 +1,32 @@
 ## What is the rhdh-plugin-export-overlays reposiotry?
 
-This repository contains workflows to package Backstage plugins (under the following npm scopes: @backstage-community, @red-hat-developer-hub and @roadiehq) as OCI images to be used as dynamic plugins within Red Hat Developer Hub (RHDH).
+The rhdh-plugin-export-overlays repository serves as a metadata and automation hub for managing dynamic Backstage plugins in Red Hat Developer Hub (RHDH).
+
+This repository:
+
+- References a wide range of Backstage plugins that can or should be published as dynamic plugins for use in RHDH.
+
+- Tracks plugin versions to ensure compatibility with the latest RHDH releases.
+
+- Defines how to drive, customize, and automate the publishing process.
+
+Additionally, it contains workflows to:
+
+- Discover eligible Backstage plugins.
+
+- Package them as OCI images for use as dynamic plugins.
+
+- Publish these images to the GitHub Container Registry for easy integration with RHDH.
+
+## Repository Structure & Partitioning
+The content in this repository is structured as follows:
+
+1. By Workspace
+Each plugin set is organized in a dedicated folder that represents a workspace—typically aligned with a monorepo hosted in a third-party GitHub repository (e.g., @backstage-community, @roadiehq, @red-hat-developer-hub).
+
+1. By RHDH Target Release
+The repository uses long-running release branches named following the pattern release-x.y (e.g., release-1.5, release-1.6).
+Each branch maps to a specific RHDH release version and contains plugin data that is compatible with the Backstage version shipped in that RHDH release.
 
 ## How to use the workflows in this repository to create OCI images for your plugins
 
@@ -53,6 +79,10 @@ Sometimes, additional configuration is required in the PR:
 - **Any plugin** may need:
    - Overlay source files in an `overlay` directory  
   (e.g., [`api-docs-module-protoc-gen-doc`](https://github.com/redhat-developer/rhdh-plugin-export-overlays/tree/release-1.5/workspaces/backstage/plugins/api-docs-module-protoc-gen-doc/overlay))
+  - A patch file at the root of the workspace to modify plugin source code during the packaging process. (Example: PR #792)
+
+  > Overlay vs. Patch:
+    Overlay replaces or adds whole files; Patch makes line-by-line changes to existing files.
 
 To add this:
 - Create a `plugins/` folder within the appropriate `workspace/`
