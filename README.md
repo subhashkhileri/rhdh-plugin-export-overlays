@@ -81,7 +81,7 @@ Sometimes, additional configuration is required in the PR:
 - **Any plugin** may need:
    - Overlay source files in an `overlay` directory  
   (e.g., [`api-docs-module-protoc-gen-doc`](https://github.com/redhat-developer/rhdh-plugin-export-overlays/tree/release-1.5/workspaces/backstage/plugins/api-docs-module-protoc-gen-doc/overlay))
-  - A patch file at the root of the workspace to modify plugin source code during the packaging process. (Example: PR [#792](https://github.com/redhat-developer/rhdh-plugin-export-overlays/pull/792/files#diff-0b648cbca6f87e11f78832c10ac9cc789235938e944c499eb275fd8788e18ef8))
+  - A patch file at the root of the workspace to modify the workspace source code before the packaging process. (Example: PR [#792](https://github.com/redhat-developer/rhdh-plugin-export-overlays/pull/792/files#diff-0b648cbca6f87e11f78832c10ac9cc789235938e944c499eb275fd8788e18ef8))
 
 > **Overlay vs. Patch**  
 > - **Overlay**: Replaces or adds entire files during the packaging process.  
