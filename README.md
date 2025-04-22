@@ -23,7 +23,7 @@ The content in this repository is structured as follows:
 
 1. **By Workspace:**
 
-Each plugin set is organized in a dedicated folder that represents a workspace—typically aligned with a monorepo hosted in a third-party GitHub repository (e.g., @backstage-community, @roadiehq, @red-hat-developer-hub).
+Each plugin set is organized in a dedicated folder that represents a workspace—typically aligned with a monorepo hosted in a third-party GitHub repository (e.g., `@backstage-community`, `@roadiehq`, `@red-hat-developer-hub`).
 
 1. **By RHDH Target Release:**
 
