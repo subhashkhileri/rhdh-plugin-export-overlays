@@ -51,7 +51,7 @@ Each branch maps to a specific RHDH release version and contains plugin data tha
     
    **How it works**:
    - The workflow generates PRs against each active release branch corresponding to an RHDH release.
-   - For each release branch, it checks for plugin versions compatible with the Backstage version that the release supports.
+   - For each release branch, it checks for published plugin versions compatible with the Backstage version that the RHDH release supports.
    - If no compatible version is found, no PR is generated for that plugin on that branch.
 
 ### Manually Creating a PR
