@@ -88,7 +88,7 @@ Sometimes, additional configuration is required in the PR:
 > - **Patch**: Applies precise, line-by-line changes to existing source files.  
 
 
-To add this additional configration (excluding the patch, since the patch file is placed at the workspace [monorepo] root):
+To add this additional configuration (excluding the patch, since the patch file is placed at the workspace [monorepo] root):
 - Create a `plugins/` folder within the appropriate `workspace/`
 - Inside `plugins/`, create one folder per plugin you wish to enhance with additional information
 
