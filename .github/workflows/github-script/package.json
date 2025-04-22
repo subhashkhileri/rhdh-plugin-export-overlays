@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@actions/github-script": "github:actions/github-script#v7.0.1"
+  }
+}
