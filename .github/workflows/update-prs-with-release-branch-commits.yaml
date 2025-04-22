@@ -12,6 +12,17 @@ on:
         type: string
         required: false
 
+  workflow_dispatch:
+    inputs:
+      release-branch:
+        description: Release branch whose PRs should be updated with the given commit.
+        type: string
+        required: true
+      pr:
+        description: PR number of a single PR to update. By default update all PRs.
+        type: string
+        required: false
+
 concurrency:
   group: ${{ github.workflow_ref }}-${{ github.ref }}
   cancel-in-progress: true
