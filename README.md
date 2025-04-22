@@ -6,7 +6,8 @@ This repository contains workflows to package Backstage plugins (under the follo
 
 ### 1. Create/Look for a PR for the plugins you wish to export against the desired RHDH relase branch version 
    
-   A GitHub workflow runs **daily at 12:00 PM UTC** to automatically generate or update PRs for plugins under the supported scopes. These PRs are created **per workspace, per release branch**.
+   A GitHub workflow runs **daily at 12:00 PM UTC** to automatically generate or update PRs for plugins under the following scopes: `@backstage-community`, `@red-hat-developer-hub` and `@roadiehq`.
+   These PRs are created **per workspace, per release branch**.
    
    If you can't find a PR for your plugin, you can manually trigger one as explained below.
    
