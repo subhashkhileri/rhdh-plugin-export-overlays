@@ -42,3 +42,6 @@ jobs:
           script: |
             const script = require('./.github/workflows/github-script/update-prs-with-release-branch-commits.js');
             await script({github, context, core});
+    permissions:
+      contents: write
+      pull-requests: write
