@@ -35,7 +35,7 @@ To add a new plugin:
 2. Add a `plugins-list.yaml` file that lists all plugins included in the target workspace of the source repository. ([See example](https://github.com/redhat-developer/rhdh-plugin-export-overlays/blob/12acb71a1febc5567c4d12c6a28c0a11ed489273/workspaces/adoption-insights/plugins-list.yaml))
 3. Add a `source.json` file with the following fields ([See example](https://github.com/redhat-developer/rhdh-plugin-export-overlays/blob/12acb71a1febc5567c4d12c6a28c0a11ed489273/workspaces/adoption-insights/source.json))
 :
-   - `repo`: URL of the source repository  
+   - `repo`: URL of the source repository  (only `https://github.com/xxx` URLs are supported for now)
    - `repo-ref`: Specific tag or commit for the target plugin/workspace version  
    - `repo-flat`:  
      - `false` if the plugins are inside a workspace (e.g., `backstage/community-plugins`)  
