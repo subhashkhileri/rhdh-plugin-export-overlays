@@ -14,15 +14,19 @@ module.exports = async ({github, context, core}) => {
         return;
       }
       const response = await github.rest.pulls.get({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          pull_number: prNumber,
-        });
-        pullRequests.push({
-          number: response.data.number,
-          branch: response.data.head.ref,
-          repository: response.data.head.repo?.full_name
-        });
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        pull_number: prNumber,
+      });
+      if (response.data.base.ref !== releaseBranch) {
+        core.setFailed(`PR #${singlePR} is not based on release branch ${releaseBranch}`);
+        return;
+      }
+      pullRequests.push({
+        number: response.data.number,
+        branch: response.data.head.ref,
+        repository: response.data.head.repo?.full_name
+      });
   } else {
       /** @type {import('@octokit/types').GetResponseTypeFromEndpointMethod<typeof github.rest.pulls.list>} */
       let response; 
