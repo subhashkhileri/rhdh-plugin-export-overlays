@@ -39,5 +39,5 @@ jobs:
           INPUT_PR: ${{ inputs.pr }}      
         with:
           script: |
-            const script = require('./github-script/update-prs-with-release-branch-commits.js');
+            const script = require('./.github/workflows/github-script/update-prs-with-release-branch-commits.js');
             await script({github, context, core});
