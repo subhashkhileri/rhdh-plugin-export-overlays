@@ -60,7 +60,8 @@ To add this:
 
 ### 4. Test the OCI image against an RHDH instance
 - To trigger a build of the OCI image for the plugins in a PR, comment: `/publish`. 
-- This runs a GitHub workflow to build and publish **test OCI artifacts**. A bot will comment with links to the artifacts (tagged as `<pr_number>_<plugin_version>`) and the PR will be labeled `help wanted to test`.
+- This runs a GitHub workflow to build and publish **test OCI artifacts**. A bot will comment with the generated OCI image references (tagged as `<pr_number>_<plugin_version>`) and possibly the list of plugins for which the generation failed.
+- If you cannot test the generated images immediately, a good practice is to label the PR with `help wanted to test`.
 
 #### Once Testing Is Complete:
 - If the plugin works with your RHDH instance, **change the label** to `tested`
