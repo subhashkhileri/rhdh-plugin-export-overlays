@@ -1,6 +1,6 @@
 ## What is the rhdh-plugin-export-overlays reposiotry?
 
-The rhdh-plugin-export-overlays repository serves as a metadata and automation hub for managing dynamic plugins in Red Hat Developer Hub (RHDH).
+The rhdh-plugin-export-overlays repository serves as a metadata and automation hub for managing dynamic plugins for Red Hat Developer Hub (RHDH).
 
 This repository:
 
