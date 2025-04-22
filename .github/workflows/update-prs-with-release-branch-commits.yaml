@@ -33,6 +33,7 @@ jobs:
     name: Update PRs
 
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/github-script@v7
         env:
           INPUT_RELEASE_BRANCH: ${{ inputs.release-branch }}      
