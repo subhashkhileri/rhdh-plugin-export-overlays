@@ -27,7 +27,7 @@ Each plugin set is organized in a dedicated folder that represents a workspaceâ€
 
 1. **By RHDH Target Release:**
 
-The repository uses long-running release branches named following the pattern release-x.y (e.g., release-1.5, release-1.6).
+The repository uses long-running release branches named following the pattern `release-x.y` (e.g., `release-1.5`, `release-1.6`).
 Each branch maps to a specific RHDH release version and contains plugin data that is compatible with the Backstage version shipped in that RHDH release.
 
 ## How to use the workflows in this repository to create OCI images for your plugins
