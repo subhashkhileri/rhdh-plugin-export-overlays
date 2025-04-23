@@ -63,6 +63,14 @@ module.exports = async ({github, context, core}) => {
   ).toString('utf-8');
   const sourceSha = sourceFile.sha;
 
+  /** @type { Array<number> } */
+  const updatedPullRequests = [];
+  /** @type { Array<number> } */
+  const skippedPullRequests = [];
+  /** @type { Array<number> } */
+  const conflictingPullRequests = [];
+  /** @type { Array<number> } */
+  const failedPullRequests = [];
   for (const pr of pullRequests) {
     core.info(`Syncing the \`${path}\` file to PR #${pr.number} (${pr.branch})`);
     try {
@@ -83,8 +91,9 @@ module.exports = async ({github, context, core}) => {
           repo,
           issue_number: pr.number,
           body: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
-You will have to updfate it manually to avoid conflicts.`
-        });    
+You will have to update it manually to avoid conflicts.`
+        });
+        conflictingPullRequests.push(pr.number);
         continue;
       }
   
@@ -106,6 +115,7 @@ You will have to updfate it manually to avoid conflicts.`
 
       if (sourceContent === targetContent) {
         core.info(`Skipping PR #${pr.number}: \`${path}\` already up-to-date`);
+        skippedPullRequests.push(pr.number);
         continue;
       }
     
@@ -120,8 +130,20 @@ You will have to updfate it manually to avoid conflicts.`
       });
 
       core.info(`\`${path}\` updated in PR #${pr.number}`);
+      updatedPullRequests.push(pr.number);
     } catch(err) {
       core.warning(`Skipping PR #${pr.number} due to error: ${err.message}`);
+      failedPullRequests.push(pr.number);
     }
   }
+  core.summary
+    .addHeading(`${updatedPullRequests.length} PRs updated:`, 4)
+    .addList(updatedPullRequests.map(Number.toString))
+    .addHeading(`${skippedPullRequests.length} PRs already up-to-date:`, 4)
+    .addList(skippedPullRequests.map(Number.toString))
+    .addHeading(`${conflictingPullRequests.length} PRs not updated to keep manual changes:`, 4)
+    .addList(conflictingPullRequests.map(Number.toString))
+    .addHeading(`${failedPullRequests.length} PRs not updated due to failure:`, 4)
+    .addList(failedPullRequests.map(Number.toString))
+    .write();
 }
