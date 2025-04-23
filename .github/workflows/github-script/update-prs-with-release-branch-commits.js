@@ -138,12 +138,12 @@ You will have to update it manually to avoid conflicts.`
   }
   core.summary
     .addHeading(`${updatedPullRequests.length} PRs updated:`, 4)
-    .addList(updatedPullRequests.map(Number.toString))
+    .addList(updatedPullRequests.map(pr => pr.toString()))
     .addHeading(`${skippedPullRequests.length} PRs already up-to-date:`, 4)
-    .addList(skippedPullRequests.map(Number.toString))
+    .addList(skippedPullRequests.map(pr => pr.toString()))
     .addHeading(`${conflictingPullRequests.length} PRs not updated to keep manual changes:`, 4)
-    .addList(conflictingPullRequests.map(Number.toString))
+    .addList(conflictingPullRequests.map(pr => pr.toString()))
     .addHeading(`${failedPullRequests.length} PRs not updated due to failure:`, 4)
-    .addList(failedPullRequests.map(Number.toString))
+    .addList(failedPullRequests.map(pr => pr.toString()))
     .write();
 }
