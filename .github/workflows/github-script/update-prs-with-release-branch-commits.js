@@ -69,15 +69,15 @@ module.exports = async ({github, context, core}) => {
       const owner = pr.repository ? pr.repository.split('/')[0] : context.repo.owner;
       const repo = pr.repository ? pr.repository.split('/')[1] : context.repo.repo;
 
-      const prFiles = await github.rest.pulls.listFiles({
+      const prFiles = (await github.rest.pulls.listCommits({
         owner: context.repo.owner,
         repo: context.repo.repo,
         pull_number: pr.number
-      });
-      if (prFiles.data
-        .find(f => f.filename === path)
-      ) {
-        core.info(`Skipping PR #${pr.number}: \`${path}\` has been modified by the PR`);
+      })).data.filter(c => c.commit.author?.name !== 'github-actions[bot]')
+      .flatMap(c => c.files ?? []);
+
+      if (prFiles.find(f => f.filename === path)) {
+        core.info(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
         await github.rest.issues.createComment({
           owner,
           repo,
