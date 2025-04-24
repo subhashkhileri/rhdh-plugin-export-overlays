@@ -269,7 +269,7 @@ jobs:
             });
             if (!('type' in targetFile) || targetFile.type !== 'file') {
               core.warning(`\`${path}\` is not a file on branch ${prBranch}`);
-              continue;
+              return;
             }
             const targetContent = Buffer.from(
               targetFile.content,
