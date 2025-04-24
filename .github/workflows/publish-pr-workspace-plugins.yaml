@@ -225,6 +225,11 @@ jobs:
     name: Checks whether the PR is up-to-date
     needs:
       - prepare
+    
+    permissions:
+      statuses: write
+      pull-requests: write
+  
     if: always() && github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
     runs-on: ubuntu-latest
     steps:
