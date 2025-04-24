@@ -226,6 +226,7 @@ jobs:
     name: Checks whether the PR is up-to-date
     needs:
       - prepare
+      - export
     
     permissions:
       statuses: write
