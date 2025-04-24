@@ -238,7 +238,7 @@ jobs:
           script: |
             const path = 'versions.json';
             const releaseBranch = core.getInput('target_branch');
-            if (! releaseBranch?.startsWith(release-)) {
+            if (! releaseBranch?.startsWith('release-')) {
               core.notice(`Current PR is not based on a release branch.`);
               return;
             }
@@ -258,7 +258,7 @@ jobs:
             ).toString('utf-8');
     
             const prRepository = core.getInput('overlay_repo');
-            const prBranch = core.getInput('overlay_repo');
+            const prBranch = core.getInput('overlay_branch');
             const owner = prRepository.split('/')[0];
             const repo = prRepository.split('/')[1];
             const { data: targetFile } = await github.rest.repos.getContent({
@@ -278,13 +278,13 @@ jobs:
       
             if (sourceContent !== targetContent) {
               core.setFailed(`PR not up-to-date with the release branch`);
-              const body = `The `versions.json` file in your PR doesn't match the one in release branch #${prBranch}\nTry updating it by adding the \`/update\` PR comment.`;
+              const body = `The \`versions.json\` file in your PR doesn't match the one in release branch #${prBranch}\nTry updating it by adding the \`/update\` PR comment.`;
               await github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 body: body
-              })       
+              });
             }
       
   updatePR:
