@@ -144,7 +144,7 @@ jobs:
               filter: 'latest',
             });
             const success = jobs.data.jobs
-              .filter(j => j.name.startsWith('export'))
+              .filter(j => j.name.startsWith('export') || j.name.startsWith('checkPRUpToDate'))
               .every(j => j.conclusion === 'success');
 
             await github.rest.repos.createCommitStatus({

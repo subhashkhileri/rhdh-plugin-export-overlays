@@ -42,9 +42,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Update PRs
 
+    outputs:
+      pr-comments: ${{ steps.update-prs.outputs.pr-comments }}
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/github-script@v7
+        id: update-prs
         env:
           INPUT_RELEASE_BRANCH: ${{ inputs.release-branch }}
           INPUT_PR: ${{ inputs.pr }}
@@ -56,4 +60,29 @@ jobs:
             await script({github, context, core});
     permissions:
       contents: write
+      pull-requests: write
+
+  comment-prs:
+    runs-on: ubuntu-latest
+    name: Comment PRs
+    needs:
+      - update-prs
+    if: needs.update-prs.outputs.pr-comments != ''
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          INPUT_PR_COMMENTS: needs.update-prs.outputs.pr-comments
+        with:
+          script: |
+            const prComments = JSON.parse(core.getInput('pr_comments'));
+            for (const pr of prComments) {
+              await github.rest.issues.createComment({
+                issue_number: pr.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: pr.comment,
+              });
+            }
+
+    permissions:
       pull-requests: write
