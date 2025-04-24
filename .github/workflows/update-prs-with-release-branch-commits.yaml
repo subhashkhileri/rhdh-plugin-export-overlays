@@ -11,7 +11,12 @@ on:
         description: PR number of a single PR to update. By default update all PRs.
         type: string
         required: false
-
+      force:
+        description: Update the PRs even if it overwrites PR manual changes.
+        type: boolean
+        default: false
+        required: false
+  
   workflow_dispatch:
     inputs:
       release-branch:
@@ -22,7 +27,12 @@ on:
         description: PR number of a single PR to update. By default update all PRs.
         type: string
         required: false
-
+      force:
+        description: Update the PRs even if it overwrites PR manual changes.
+        type: boolean
+        default: false
+        required: false
+  
 concurrency:
   group: ${{ github.workflow_ref }}-${{ github.ref }}
   cancel-in-progress: true
@@ -37,7 +47,9 @@ jobs:
       - uses: actions/github-script@v7
         env:
           INPUT_RELEASE_BRANCH: ${{ inputs.release-branch }}      
-          INPUT_PR: ${{ inputs.pr }}      
+          INPUT_PR: ${{ inputs.pr }}
+          INPUT_FORCE: ${{ inputs.force }}      
+
         with:
           script: |
             const script = require('./.github/workflows/github-script/update-prs-with-release-branch-commits.js');

@@ -3,6 +3,7 @@
 module.exports = async ({github, context, core}) => {
   const releaseBranch = core.getInput('release_branch');
   const singlePR = core.getInput('pr');
+  const force = core.getBooleanInput('force');
   const path = 'versions.json';
 
   /** @type { Array<{ number: number, title: string, branch: string, repository?: string}> } */
@@ -90,7 +91,7 @@ module.exports = async ({github, context, core}) => {
       if (!('type' in targetFile) || targetFile.type !== 'file') {
         core.warning(`\`${path}\` is not a file on branch ${pr.branch}`);
         continue;
-      }    
+      }
       const targetContent = Buffer.from(
         targetFile.content,
         (Buffer.isEncoding(targetFile.encoding) ? targetFile.encoding : 'utf-8')
@@ -102,19 +103,23 @@ module.exports = async ({github, context, core}) => {
         uptodatePullRequests.push(pr);
         continue;
       }
-      
+            
       if (owner !== context.repo.owner) {
         core.notice(`Skipping PR #${pr.number}: the PR is from a repository fork.`);
-        await github.rest.issues.createComment({
-          owner: context.repo.owner,
-          repo: context.repo.owner,
-          issue_number: pr.number,
-          body: `The file \`${path}\` could not be synced from branch \`${releaseBranch}\` into this because your PR is from a fork.\n\nYou should update the \`versions.json\` file with the following content:
-\`\`\`
-${sourceContent}
-\`\`\`
-`
-        });
+        try {
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.owner,
+            issue_number: pr.number,
+            body: `The file \`${path}\` could not be synced from branch \`${releaseBranch}\` into this because your PR is from a fork.\n\nYou should update the \`versions.json\` file with the following content:
+  \`\`\`
+  ${sourceContent}
+  \`\`\`
+  `
+          });
+        } catch(err) {
+          core.error(err);
+        }
         forkedPullRequests.push(pr);
         continue;
       }
@@ -132,16 +137,20 @@ ${sourceContent}
         })
       ))).flatMap(response => response.data.files);
       if (prFiles.find(f => f?.filename === path)) {
-        core.notice(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
-        await github.rest.issues.createComment({
-          owner,
-          repo,
-          issue_number: pr.number,
-          body: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
-You will have to update it manually to avoid conflicts.`
-        });
-        conflictingPullRequests.push(pr);
-        continue;
+        if (force) {
+          core.notice(`Overwriting previous manual \`${path}\` change.`);
+        } else {
+          core.notice(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: pr.number,
+            body: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
+  You will have to update it manually to avoid conflicts.`
+          });
+          conflictingPullRequests.push(pr);
+          continue;
+        }
       }
   
       await github.rest.repos.createOrUpdateFileContents({
