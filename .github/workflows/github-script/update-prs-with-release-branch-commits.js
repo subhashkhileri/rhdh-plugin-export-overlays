@@ -76,6 +76,8 @@ module.exports = async ({github, context, core}) => {
   const forkedPullRequests = [];
   /** @type { Array<{title: string, number: number}> } */
   const failedPullRequests = [];
+  /** @type { Array<{number: number, comment: string}> } */
+  const prComments = [];
   for (const pr of pullRequests) {
     core.info(`Syncing the \`${path}\` file to PR #${pr.number} (${pr.branch})`);
     try {
@@ -106,20 +108,14 @@ module.exports = async ({github, context, core}) => {
             
       if (owner !== context.repo.owner) {
         core.notice(`Skipping PR #${pr.number}: the PR is from a repository fork.`);
-        try {
-          await github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.owner,
-            issue_number: pr.number,
-            body: `The file \`${path}\` could not be synced from branch \`${releaseBranch}\` into this because your PR is from a fork.\n\nYou should update the \`versions.json\` file with the following content:
-  \`\`\`
-  ${sourceContent}
-  \`\`\`
-  `
-          });
-        } catch(err) {
-          core.error(err);
-        }
+        prComments.push({
+          number: pr.number,
+          comment: `The file \`${path}\` could not be synced from branch \`${releaseBranch}\` into this because your PR is from a fork.\n\nYou should update the \`versions.json\` file with the following content:
+\`\`\`
+${sourceContent}
+\`\`\`
+`
+        });
         forkedPullRequests.push(pr);
         continue;
       }
@@ -141,12 +137,13 @@ module.exports = async ({github, context, core}) => {
           core.notice(`Overwriting previous manual \`${path}\` change.`);
         } else {
           core.notice(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
-          await github.rest.issues.createComment({
-            owner,
-            repo,
-            issue_number: pr.number,
-            body: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
-  You will have to update it manually to avoid conflicts.`
+          prComments.push({
+            number: pr.number,
+            comment: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
+You will have to update it manually with the following content to avoid conflicts:
+\`\`\`
+${sourceContent}
+\`\`\``
           });
           conflictingPullRequests.push(pr);
           continue;
@@ -193,4 +190,8 @@ module.exports = async ({github, context, core}) => {
     .addList(failedPullRequests.map(pr => `${pr.title} (#${pr.number})`));
   }
   summary.write();
+  if (prComments.length > 0) {
+    core.setOutput('pr-comments', prComments);
+  }
+
 }
