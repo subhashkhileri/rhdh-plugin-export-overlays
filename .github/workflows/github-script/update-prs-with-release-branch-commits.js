@@ -5,7 +5,7 @@ module.exports = async ({github, context, core}) => {
   const singlePR = core.getInput('pr');
   const path = 'versions.json';
 
-  /** @type { Array<{ number: number, branch: String, repository?: String}> } */
+  /** @type { Array<{ number: number, title: string, branch: string, repository?: string}> } */
   const pullRequests = [];
   if (singlePR !== '') {
       const prNumber = parseInt(singlePR);
@@ -24,6 +24,7 @@ module.exports = async ({github, context, core}) => {
       }
       pullRequests.push({
         number: response.data.number,
+        title: response.data.title,
         branch: response.data.head.ref,
         repository: response.data.head.repo?.full_name
       });
@@ -40,6 +41,7 @@ module.exports = async ({github, context, core}) => {
           });
           pullRequests.push(...response.data.map(pr => ({
             number: pr.number,
+            title: pr.title,
             branch: pr.head.ref,
             repository: pr.head.repo?.full_name
           })));
@@ -63,13 +65,13 @@ module.exports = async ({github, context, core}) => {
   ).toString('utf-8');
   const sourceSha = sourceFile.sha;
 
-  /** @type { Array<number> } */
+  /** @type { Array<{title: string, number: number}> } */
   const updatedPullRequests = [];
-  /** @type { Array<number> } */
+  /** @type { Array<{title: string, number: number}> } */
   const skippedPullRequests = [];
-  /** @type { Array<number> } */
+  /** @type { Array<{title: string, number: number}> } */
   const conflictingPullRequests = [];
-  /** @type { Array<number> } */
+  /** @type { Array<{title: string, number: number}> } */
   const failedPullRequests = [];
   for (const pr of pullRequests) {
     core.info(`Syncing the \`${path}\` file to PR #${pr.number} (${pr.branch})`);
@@ -77,14 +79,20 @@ module.exports = async ({github, context, core}) => {
       const owner = pr.repository ? pr.repository.split('/')[0] : context.repo.owner;
       const repo = pr.repository ? pr.repository.split('/')[1] : context.repo.repo;
 
-      const prFiles = (await github.rest.pulls.listCommits({
+      const prFiles = (await Promise.all((await github.rest.pulls.listCommits({
         owner: context.repo.owner,
         repo: context.repo.repo,
         pull_number: pr.number
-      })).data.filter(c => c.commit.author?.name !== 'github-actions[bot]')
-      .flatMap(c => c.files ?? []);
+      })).data.filter(c => 
+          c.author?.login !== 'github-actions[bot]'
+      ).map(c => github.rest.repos.getCommit({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          ref: c.sha
+        })
+      ))).flatMap(response => response.data.files);
 
-      if (prFiles.find(f => f.filename === path)) {
+      if (prFiles.find(f => f?.filename === path)) {
         core.info(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
         await github.rest.issues.createComment({
           owner,
@@ -93,7 +101,7 @@ module.exports = async ({github, context, core}) => {
           body: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
 You will have to update it manually to avoid conflicts.`
         });
-        conflictingPullRequests.push(pr.number);
+        conflictingPullRequests.push(pr);
         continue;
       }
   
@@ -115,7 +123,7 @@ You will have to update it manually to avoid conflicts.`
 
       if (sourceContent === targetContent) {
         core.info(`Skipping PR #${pr.number}: \`${path}\` already up-to-date`);
-        skippedPullRequests.push(pr.number);
+        skippedPullRequests.push(pr);
         continue;
       }
     
@@ -130,20 +138,29 @@ You will have to update it manually to avoid conflicts.`
       });
 
       core.info(`\`${path}\` updated in PR #${pr.number}`);
-      updatedPullRequests.push(pr.number);
+      updatedPullRequests.push(pr);
     } catch(err) {
       core.warning(`Skipping PR #${pr.number} due to error: ${err.message}`);
-      failedPullRequests.push(pr.number);
+      failedPullRequests.push(pr);
     }
   }
-  core.summary
-    .addHeading(`${updatedPullRequests.length} PRs updated:`, 4)
-    .addList(updatedPullRequests.map(pr => pr.toString()))
-    .addHeading(`${skippedPullRequests.length} PRs already up-to-date:`, 4)
-    .addList(skippedPullRequests.map(pr => pr.toString()))
-    .addHeading(`${conflictingPullRequests.length} PRs not updated to keep manual changes:`, 4)
-    .addList(conflictingPullRequests.map(pr => pr.toString()))
-    .addHeading(`${failedPullRequests.length} PRs not updated due to failure:`, 4)
-    .addList(failedPullRequests.map(pr => pr.toString()))
-    .write();
+
+  let summary = core.summary;
+  if (updatedPullRequests.length > 0) {
+    summary = summary.addHeading(`${updatedPullRequests.length} PRs updated:`, 4)
+    .addList(updatedPullRequests.map(pr => `${pr.title} (#${pr.number})`));
+  }
+  if (skippedPullRequests.length > 0) {
+    summary = summary.addHeading(`${skippedPullRequests.length} PRs already up-to-date:`, 4)
+    .addList(skippedPullRequests.map(pr => `${pr.title} (#${pr.number})`));
+  }
+  if (conflictingPullRequests.length > 0) {
+    summary = summary.addHeading(`${conflictingPullRequests.length} PRs not updated to keep manual changes:`, 4)
+    .addList(conflictingPullRequests.map(pr => `${pr.title} (#${pr.number})`));
+  }
+  if (failedPullRequests.length > 0) {
+    summary = summary.addHeading(`${failedPullRequests.length} PRs not updated due to failure:`, 4)
+    .addList(failedPullRequests.map(pr => `${pr.title} (#${pr.number})`));
+  }
+  summary.write();
 }
