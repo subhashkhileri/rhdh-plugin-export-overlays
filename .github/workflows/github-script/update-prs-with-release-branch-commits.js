@@ -20,7 +20,7 @@ module.exports = async ({github, context, core}) => {
         pull_number: prNumber,
       });
       if (response.data.base.ref !== releaseBranch) {
-        core.setFailed(`PR #${singlePR} is not based on release branch ${releaseBranch}`);
+        core.setFailed(`PR #${singlePR} is not based on release branch \`${releaseBranch}\``);
         return;
       }
       pullRequests.push({
@@ -79,7 +79,7 @@ module.exports = async ({github, context, core}) => {
   /** @type { Array<{number: number, comment: string}> } */
   const prComments = [];
   for (const pr of pullRequests) {
-    core.info(`Syncing the \`${path}\` file to PR #${pr.number} (${pr.branch})`);
+    core.info(`Syncing the \`${path}\` file to PR #${pr.number} (\`${pr.branch}\`)`);
     try {
       const owner = pr.repository ? pr.repository.split('/')[0] : context.repo.owner;
       const repo = pr.repository ? pr.repository.split('/')[1] : context.repo.repo;
@@ -150,17 +150,22 @@ ${sourceContent}
         }
       }
   
-      await github.rest.repos.createOrUpdateFileContents({
+      const update = await github.rest.repos.createOrUpdateFileContents({
         owner,
         repo,
         path,
-        message: `chore: sync \`${path}\` from ${pr.branch}`,
+        message: `chore: sync \`${path}\` from \`${pr.branch}\``,
         content: Buffer.from(sourceContent).toString('base64'),
         sha: targetSha,
         branch: pr.branch,
       });
 
       core.info(`\`${path}\` updated in PR #${pr.number}`);
+      prComments.push({
+        number: pr.number,
+        comment: `Successfully updated file \`${path}\`from branch \`${pr.branch}\` into this PR in commit ${update.data.commit.sha}`
+      });
+
       updatedPullRequests.push(pr);
     } catch(err) {
       core.warning(`Skipping PR #${pr.number} due to error: ${err.message}`);

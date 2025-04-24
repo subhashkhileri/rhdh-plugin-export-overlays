@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/github-script@v7
         env:
-          INPUT_PR_COMMENTS: needs.update-prs.outputs.pr-comments
+          INPUT_PR_COMMENTS: ${{ needs.update-prs.outputs.pr-comments }}
         with:
           script: |
             const prComments = JSON.parse(core.getInput('pr_comments'));
