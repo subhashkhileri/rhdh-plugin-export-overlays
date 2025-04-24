@@ -82,6 +82,7 @@ jobs:
                 repo: context.repo.repo,
                 body: pr.comment,
               });
+              await new Promise(r => setTimeout(r, 500));
             }
 
     permissions:
