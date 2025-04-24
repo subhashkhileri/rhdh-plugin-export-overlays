@@ -297,4 +297,6 @@ jobs:
       force: true
       pr: ${{ github.event.issue.number }}
       release-branch: ${{ needs.prepare.outputs.target-branch }}
-            
+    permissions:
+      contents: write
+      pull-requests: write
