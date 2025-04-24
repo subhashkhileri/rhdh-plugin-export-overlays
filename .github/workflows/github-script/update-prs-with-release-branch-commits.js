@@ -31,14 +31,16 @@ module.exports = async ({github, context, core}) => {
       });
   } else {
       /** @type {import('@octokit/types').GetResponseTypeFromEndpointMethod<typeof github.rest.pulls.list>} */
-      let response; 
-      do {
+      let response;
+      let page = 1;
+      do {          
           response = await github.rest.pulls.list({
             owner: context.repo.owner,
             repo: context.repo.repo,
             state: 'open',
             base: releaseBranch,
             per_page: 100,
+            page,
           });
           pullRequests.push(...response.data.map(pr => ({
             number: pr.number,
@@ -46,6 +48,7 @@ module.exports = async ({github, context, core}) => {
             branch: pr.head.ref,
             repository: pr.head.repo?.full_name
           })));
+          page++;
       } while (response.data.length > 0);
   }
 
