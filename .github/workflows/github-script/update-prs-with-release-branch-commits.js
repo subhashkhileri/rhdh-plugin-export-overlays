@@ -68,9 +68,11 @@ module.exports = async ({github, context, core}) => {
   /** @type { Array<{title: string, number: number}> } */
   const updatedPullRequests = [];
   /** @type { Array<{title: string, number: number}> } */
-  const skippedPullRequests = [];
+  const uptodatePullRequests = [];
   /** @type { Array<{title: string, number: number}> } */
   const conflictingPullRequests = [];
+  /** @type { Array<{title: string, number: number}> } */
+  const forkedPullRequests = [];
   /** @type { Array<{title: string, number: number}> } */
   const failedPullRequests = [];
   for (const pr of pullRequests) {
@@ -78,33 +80,7 @@ module.exports = async ({github, context, core}) => {
     try {
       const owner = pr.repository ? pr.repository.split('/')[0] : context.repo.owner;
       const repo = pr.repository ? pr.repository.split('/')[1] : context.repo.repo;
-
-      const prFiles = (await Promise.all((await github.rest.pulls.listCommits({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        pull_number: pr.number
-      })).data.filter(c => 
-          c.author?.login !== 'github-actions[bot]'
-      ).map(c => github.rest.repos.getCommit({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          ref: c.sha
-        })
-      ))).flatMap(response => response.data.files);
-
-      if (prFiles.find(f => f?.filename === path)) {
-        core.info(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
-        await github.rest.issues.createComment({
-          owner,
-          repo,
-          issue_number: pr.number,
-          body: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
-You will have to update it manually to avoid conflicts.`
-        });
-        conflictingPullRequests.push(pr);
-        continue;
-      }
-  
+      
       const { data: targetFile } = await github.rest.repos.getContent({
         owner,
         repo: pr.repository ? pr.repository.split('/')[1] : context.repo.repo,
@@ -123,10 +99,51 @@ You will have to update it manually to avoid conflicts.`
 
       if (sourceContent === targetContent) {
         core.info(`Skipping PR #${pr.number}: \`${path}\` already up-to-date`);
-        skippedPullRequests.push(pr);
+        uptodatePullRequests.push(pr);
         continue;
       }
-    
+      
+      if (owner !== context.repo.owner) {
+        core.notice(`Skipping PR #${pr.number}: the PR is from a repository fork.`);
+        await github.rest.issues.createComment({
+          owner: context.repo.owner,
+          repo: context.repo.owner,
+          issue_number: pr.number,
+          body: `The file \`${path}\` could not be synced from branch \`${releaseBranch}\` into this because your PR is from a fork.\n\nYou should update the \`versions.json\` file with the following content:
+\`\`\`
+${sourceContent}
+\`\`\`
+`
+        });
+        forkedPullRequests.push(pr);
+        continue;
+      }
+
+      const prFiles = (await Promise.all((await github.rest.pulls.listCommits({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        pull_number: pr.number
+      })).data.filter(c => 
+          c.author?.login !== 'github-actions[bot]'
+      ).map(c => github.rest.repos.getCommit({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          ref: c.sha
+        })
+      ))).flatMap(response => response.data.files);
+      if (prFiles.find(f => f?.filename === path)) {
+        core.notice(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
+        await github.rest.issues.createComment({
+          owner,
+          repo,
+          issue_number: pr.number,
+          body: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
+You will have to update it manually to avoid conflicts.`
+        });
+        conflictingPullRequests.push(pr);
+        continue;
+      }
+  
       await github.rest.repos.createOrUpdateFileContents({
         owner,
         repo,
@@ -150,13 +167,17 @@ You will have to update it manually to avoid conflicts.`
     summary = summary.addHeading(`${updatedPullRequests.length} PRs updated:`, 4)
     .addList(updatedPullRequests.map(pr => `${pr.title} (#${pr.number})`));
   }
-  if (skippedPullRequests.length > 0) {
-    summary = summary.addHeading(`${skippedPullRequests.length} PRs already up-to-date:`, 4)
-    .addList(skippedPullRequests.map(pr => `${pr.title} (#${pr.number})`));
+  if (uptodatePullRequests.length > 0) {
+    summary = summary.addHeading(`${uptodatePullRequests.length} PRs already up-to-date:`, 4)
+    .addList(uptodatePullRequests.map(pr => `${pr.title} (#${pr.number})`));
   }
   if (conflictingPullRequests.length > 0) {
     summary = summary.addHeading(`${conflictingPullRequests.length} PRs not updated to keep manual changes:`, 4)
     .addList(conflictingPullRequests.map(pr => `${pr.title} (#${pr.number})`));
+  }
+  if (forkedPullRequests.length > 0) {
+    summary = summary.addHeading(`${forkedPullRequests.length} PRs not updated because based on a fork:`, 4)
+    .addList(forkedPullRequests.map(pr => `${pr.title} (#${pr.number})`));
   }
   if (failedPullRequests.length > 0) {
     summary = summary.addHeading(`${failedPullRequests.length} PRs not updated due to failure:`, 4)
