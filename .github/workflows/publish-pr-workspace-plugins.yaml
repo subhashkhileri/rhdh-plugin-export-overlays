@@ -116,6 +116,7 @@ jobs:
     needs:
       - prepare
       - export
+      - checkPRUpToDate
 
     permissions:
       statuses: write
