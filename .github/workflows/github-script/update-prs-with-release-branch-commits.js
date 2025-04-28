@@ -142,7 +142,7 @@ ${sourceContent}
           core.notice(`Skipping PR #${pr.number}: \`${path}\` has been manually modified in the PR`);
           prComments.push({
             number: pr.number,
-            comment: `The file \`${path}\` could not be synced from branch \`${pr.branch}\` into this PR because it was manually modified in this PR.
+            comment: `The file \`${path}\` could not be synced from branch \`${releaseBranch}\` into this PR because it was manually modified in this PR.
 You will have to update it manually with the following content to avoid conflicts:
 \`\`\`
 ${sourceContent}
@@ -157,7 +157,7 @@ ${sourceContent}
         owner,
         repo,
         path,
-        message: `chore: sync \`${path}\` from \`${pr.branch}\``,
+        message: `chore: sync \`${path}\` from \`${releaseBranch}\``,
         content: Buffer.from(sourceContent).toString('base64'),
         sha: targetSha,
         branch: pr.branch,
@@ -166,7 +166,7 @@ ${sourceContent}
       core.info(`\`${path}\` updated in PR #${pr.number}`);
       prComments.push({
         number: pr.number,
-        comment: `Successfully updated file \`${path}\`from branch \`${pr.branch}\` into this PR in commit ${update.data.commit.sha}`
+        comment: `Successfully updated file \`${path}\`from branch \`${releaseBranch}\` into this PR in commit ${update.data.commit.sha}`
       });
 
       updatedPullRequests.push(pr);
