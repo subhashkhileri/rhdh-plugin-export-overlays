@@ -117,8 +117,8 @@ jobs:
       image-repository-prefix: ${{ inputs.image-repository-prefix }}
       
     secrets:
-      image-registry-user: ${{ secrets.image-registry-user }}
-      image-registry-password: ${{ secrets.image-registry-password }}
+      image-registry-user: ${{ secrets.image-registry-user || github.actor }}
+      image-registry-password: ${{ secrets.image-registry-password || secrets.GITHUB_TOKEN }}
 
     permissions:
       contents: write
