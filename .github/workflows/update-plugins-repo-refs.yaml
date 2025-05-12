@@ -53,7 +53,7 @@ jobs:
     with:
       regexps: ${{ needs.prepare.outputs.regexps }}
       overlay-repo: ${{ github.repository }}      
-      release-branch-prefix: release-
+      release-branch-pattern: ^release-(1\.5|1\.6|1\.7)$
       verbose: ${{ inputs.verbose != '' && inputs.verbose }}
       debug: ${{ inputs.debug != '' && inputs.debug }}
     permissions:
