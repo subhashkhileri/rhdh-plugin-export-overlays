@@ -14,14 +14,16 @@ on:
         required: false
         default: ""
 
-      branch-type:
-        description: The type of the branch(es) targeted by this update workflow. 
-        type: choice
-        options:
-          - main
-          - releases
+      allow-workspace-addition:
+        description: allow creating PRs that will add workspaces
+        type: boolean
         required: false
-        default: main
+
+      release-branch-pattern:
+        description: A regular expression that defines the watched branches. 
+        type: string
+        required: false
+        default: ^main$
 
       verbose:
         description: enable verbose logs
@@ -48,11 +50,16 @@ on:
         required: false
         default: ""
 
-      branch-type:
-        description: The type of the branch(es) targeted by this update workflow. 
+      allow-workspace-addition:
+        description: allow creating PRs that will add workspaces
+        type: boolean
+        required: false
+
+      release-branch-pattern:
+        description: A regular expression that defines the watched branches. 
         type: string
         required: false
-        default: main
+        default: ^main$
 
       verbose:
         description: enable verbose logs
@@ -97,6 +104,23 @@ jobs:
             echo "$regexps"
             echo "regexps=$(echo $regexps | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
+  update-branches:
+    name: Update Branches
+    needs: prepare
+    if: github.event_name != 'schedule'
+    uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/update-plugins-repo-refs.yaml@main
+    with:
+      regexps: ${{ needs.prepare.outputs.regexps }}
+      workspace-path: ${{ inputs.workspace-path }}
+      overlay-repo: ${{ github.repository }}      
+      release-branch-pattern: ${{ inputs.release-branch-pattern }}
+      verbose: ${{ inputs.verbose != '' && inputs.verbose }}
+      debug: ${{ inputs.debug != '' && inputs.debug }}
+      allow-workspace-addition: ${{ inputs.allow-workspace-addition != '' && inputs.allow-workspace-addition }}
+    permissions:
+      contents: write
+      pull-requests: write
+
   update-release-branches:
     name: Update Release Branches
     needs: prepare
@@ -120,8 +144,7 @@ jobs:
     name: Update Main Branch
     needs: prepare
     if: >-
-      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * *') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.branch-type == 'main')
+      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * *')
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/update-plugins-repo-refs.yaml@main
     with:
       regexps: ${{ needs.prepare.outputs.regexps }}

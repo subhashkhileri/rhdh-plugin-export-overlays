@@ -356,7 +356,6 @@ jobs:
     if: github.event.comment.body == '/update-commit'
     uses: ./.github/workflows/update-plugins-repo-refs.yaml
     with:
-      overlay-repo: ${{ github.repository }}
       release-branch-pattern: ${{ needs.prepare.outputs.overlay-branch }}
       allow-workspace-addition: false
       pr-to-update: ${{ needs.prepare.outputs.pr-number }}
