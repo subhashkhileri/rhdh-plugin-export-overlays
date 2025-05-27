@@ -338,7 +338,7 @@ jobs:
               filter: 'latest',
             });
             const success = jobs.data.jobs
-              .filter(j => j.name.startsWith('updatePRWithVersions')
+              .filter(j => j.name.startsWith('updatePRWithVersions'))
               .every(j => j.conclusion === 'success');
 
             let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
@@ -392,7 +392,7 @@ jobs:
               filter: 'latest',
             });
             const success = jobs.data.jobs
-              .filter(j => j.name.startsWith('updatePRWithCommit')
+              .filter(j => j.name.startsWith('updatePRWithCommit'))
               .every(j => j.conclusion === 'success');
 
             let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
