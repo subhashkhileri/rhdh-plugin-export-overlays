@@ -50,6 +50,11 @@ on:
         required: false
         default: ""
 
+      pr-to-update:
+        type: string
+        required: false
+        default: ""
+
       allow-workspace-addition:
         description: allow creating PRs that will add workspaces
         type: boolean
@@ -112,7 +117,8 @@ jobs:
     with:
       regexps: ${{ needs.prepare.outputs.regexps }}
       workspace-path: ${{ inputs.workspace-path }}
-      overlay-repo: ${{ github.repository }}      
+      pr-to-update: ${{ inputs.pr-to-update }}
+      overlay-repo: ${{ github.repository }}
       release-branch-pattern: ${{ inputs.release-branch-pattern }}
       verbose: ${{ inputs.verbose != '' && inputs.verbose }}
       debug: ${{ inputs.debug != '' && inputs.debug }}
