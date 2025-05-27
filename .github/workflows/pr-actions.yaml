@@ -338,7 +338,7 @@ jobs:
               filter: 'latest',
             });
             const success = jobs.data.jobs
-              .filter(j => j.name.startsWith('updatePRWithVersions'))
+              .filter(j => j.name.startsWith('Update versions on PR'))
               .every(j => j.conclusion === 'success');
 
             let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
@@ -356,7 +356,7 @@ jobs:
     if: github.event.comment.body == '/update-commit'
     uses: ./.github/workflows/update-plugins-repo-refs.yaml
     with:
-      release-branch-pattern: ${{ needs.prepare.outputs.overlay-branch }}
+      release-branch-pattern: ${{ needs.prepare.outputs.target-branch }}
       allow-workspace-addition: false
       pr-to-update: ${{ needs.prepare.outputs.pr-number }}
       workspace-path: ${{ needs.prepare.outputs.workspace }}
@@ -392,7 +392,7 @@ jobs:
               filter: 'latest',
             });
             const success = jobs.data.jobs
-              .filter(j => j.name.startsWith('updatePRWithCommit'))
+              .filter(j => j.name.startsWith('Update commit on PR'))
               .every(j => j.conclusion === 'success');
 
             let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
