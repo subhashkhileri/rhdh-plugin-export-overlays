@@ -3,20 +3,71 @@ on:
   workflow_dispatch:
     inputs:
       regexps:
+        description: line-separated list of regular expressions of the plugin packages to discover. An expression surrounded by single quotes is taken as a litteral package name. 
         type: string
         required: false
-        default: ""        
+        default: ""
+
+      workspace-path:
+        description: relative path of a workspace the discovery should be focused on
+        type: string
+        required: false
+        default: ""
+
+      branch-type:
+        description: The type of the branch(es) targeted by this update workflow. 
+        type: choice
+        options:
+          - main
+          - releases
+        required: false
+        default: main
+
       verbose:
+        description: enable verbose logs
         type: boolean
         required: false
         default: false        
       debug:
+        description: enable debug mode in bash scripts
+        type: boolean
+        required: false
+        default: false
+
+  workflow_call:
+    inputs:
+      regexps:
+        description: line-separated list of regular expressions of the plugin packages to discover. An expression surrounded by single quotes is taken as a litteral package name. 
+        type: string
+        required: false
+        default: ""
+
+      workspace-path:
+        description: relative path of a workspace the discovery should be focused on
+        type: string
+        required: false
+        default: ""
+
+      branch-type:
+        description: The type of the branch(es) targeted by this update workflow. 
+        type: string
+        required: false
+        default: main
+
+      verbose:
+        description: enable verbose logs
+        type: boolean
+        required: false
+        default: false        
+      debug:
+        description: enable debug mode in bash scripts
         type: boolean
         required: false
         default: false
   
   schedule:
     - cron: '0 12 * * *'
+    - cron: '0 19 * * *'
 
 concurrency:
   group: ${{ github.workflow }}
@@ -46,17 +97,40 @@ jobs:
             echo "$regexps"
             echo "regexps=$(echo $regexps | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
-  update:
-    name: Update
+  update-release-branches:
+    name: Update Release Branches
     needs: prepare
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 12 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.branch-type == 'releases')
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/update-plugins-repo-refs.yaml@main
     with:
       regexps: ${{ needs.prepare.outputs.regexps }}
+      workspace-path: ${{ inputs.workspace-path }}
       overlay-repo: ${{ github.repository }}      
       release-branch-pattern: ^release-(1\.5|1\.6|1\.7)$
       verbose: ${{ inputs.verbose != '' && inputs.verbose }}
       debug: ${{ inputs.debug != '' && inputs.debug }}
+      allow-workspace-addition: false
     permissions:
       contents: write
       pull-requests: write
 
+  update-main-branch:
+    name: Update Main Branch
+    needs: prepare
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 19 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.branch-type == 'main')
+    uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/update-plugins-repo-refs.yaml@main
+    with:
+      regexps: ${{ needs.prepare.outputs.regexps }}
+      workspace-path: ${{ inputs.workspace-path }}
+      overlay-repo: ${{ github.repository }}      
+      release-branch-pattern: ^main$
+      verbose: ${{ inputs.verbose != '' && inputs.verbose }}
+      debug: ${{ inputs.debug != '' && inputs.debug }}
+      allow-workspace-addition: true
+    permissions:
+      contents: write
+      pull-requests: write

@@ -1,4 +1,4 @@
-name: Publish PR Dynamic Plugin Images
+name: Pull Request Actions
 on:
   issue_comment:
     types: [created, edited]
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Prepare
 
-    if: github.event.issue.pull_request && (github.event.comment.body == '/publish' || github.event.comment.body == '/update')
+    if: github.event.issue.pull_request && (github.event.comment.body == '/publish' || github.event.comment.body == '/update-versions' || github.event.comment.body == '/update-commit')
     outputs:
       target-branch: ${{ steps.get-branch.outputs.target-branch }}
       overlay-branch: ${{ steps.get-branch.outputs.overlay-branch }}
@@ -88,6 +88,7 @@ jobs:
             }
             
   export:
+    name: Publish PR Dynamic Plugin Images
     needs:
       - prepare
 
@@ -112,7 +113,7 @@ jobs:
       packages: write
       id-token: write
 
-  add_completion_comment:
+  add_publish_completion_comment:
     needs:
       - prepare
       - export
@@ -184,7 +185,7 @@ jobs:
     needs:
       - prepare
 
-    if: always() && github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace == ''
+    if: always() && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace == ''
     runs-on: ubuntu-latest
     steps:
       - name: Add success comment
@@ -194,23 +195,25 @@ jobs:
 
         with:
           script: |
-            const workflowRun = await github.rest.actions.getWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: '${{ github.run_id }}'
-            });
+            if (context.payload.comment.body === '/publish') {
+              const workflowRun = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: '${{ github.run_id }}'
+              });
 
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: core.getInput('overlay_commit'),
-              description: '${{ github.workflow }}',
-              state: 'failure',
-              target_url: workflowRun.data.html_url,
-              context: 'publish',
-            });
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: core.getInput('overlay_commit'),
+                description: '${{ github.workflow }}',
+                state: 'failure',
+                target_url: workflowRun.data.html_url,
+                context: 'publish',
+              });
+            }
 
-            const body = `Publish action cancelled: PR doesn't touch only 1 workspace`;
+            const body = `PR action (\`${context.payload.comment.body}\`) cancelled: PR doesn't touch only 1 workspace.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -223,7 +226,7 @@ jobs:
       pull-requests: write
 
   checkPRUpToDate:
-    name: Checks whether the PR is up-to-date
+    name: Checks whether the PR is up-to-date with versions.json
     needs:
       - prepare
       - export
@@ -285,7 +288,7 @@ jobs:
       
             if (sourceContent !== targetContent) {
               core.setFailed(`PR not up-to-date with the release branch`);
-              const body = `The \`versions.json\` file in your PR doesn't match the one in release branch #${prBranch}\nTry updating it by adding the \`/update\` PR comment.`;
+              const body = `The \`versions.json\` file in your PR doesn't match the one in release branch #${prBranch}\nTry updating it by adding the \`/update-versions\` PR comment.`;
               await github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
@@ -294,11 +297,11 @@ jobs:
               });
             }
       
-  updatePR:
-    name: Update PR from release branch
+  updatePRWithVersions:
+    name: Update versions on PR from release branch
     needs:
       - prepare
-    if: github.event.comment.body == '/update'
+    if: github.event.comment.body == '/update-versions'
     uses: ./.github/workflows/update-prs-with-release-branch-commits.yaml
     with:
       force: true
@@ -307,3 +310,96 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+
+  add_update_versions_completion_comment:
+    needs:
+      - prepare
+      - updatePRWithVersions
+
+    permissions:
+      pull-requests: write
+
+    if: always() && github.event.comment.body == '/update-versions' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add completion comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflowRun = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: '${{ github.run_id }}'
+            });
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: '${{ github.run_id }}',
+              filter: 'latest',
+            });
+            const success = jobs.data.jobs
+              .filter(j => j.name.startsWith('updatePRWithVersions')
+              .every(j => j.conclusion === 'success');
+
+            let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            })    
+
+  updatePRWithCommit:
+    name: Update commit on PR from automatic discovery
+    needs:
+      - prepare
+    if: github.event.comment.body == '/update-commit'
+    uses: ./.github/workflows/update-plugins-repo-refs.yaml
+    with:
+      overlay-repo: ${{ github.repository }}
+      release-branch-pattern: ${{ needs.prepare.outputs.overlay-branch }}
+      allow-workspace-addition: false
+      pr-to-update: ${{ needs.prepare.outputs.pr-number }}
+      workspace-path: ${{ needs.prepare.outputs.workspace }}
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+  add_update_commit_completion_comment:
+    needs:
+      - prepare
+      - updatePRWithCommit
+
+    permissions:
+      pull-requests: write
+
+    if: always() && github.event.comment.body == '/update-commit' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add completion comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflowRun = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: '${{ github.run_id }}'
+            });
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: '${{ github.run_id }}',
+              filter: 'latest',
+            });
+            const success = jobs.data.jobs
+              .filter(j => j.name.startsWith('updatePRWithCommit')
+              .every(j => j.conclusion === 'success');
+
+            let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            })
