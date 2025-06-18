@@ -195,12 +195,13 @@ jobs:
 
         with:
           script: |
+            const workflowRun = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: '${{ github.run_id }}'
+            });
+
             if (context.payload.comment.body === '/publish') {
-              const workflowRun = await github.rest.actions.getWorkflowRun({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: '${{ github.run_id }}'
-              });
 
               await github.rest.repos.createCommitStatus({
                 owner: context.repo.owner,
@@ -213,7 +214,7 @@ jobs:
               });
             }
 
-            const body = `PR action (\`${context.payload.comment.body}\`) cancelled: PR doesn't touch only 1 workspace.`;
+            const body = `[PR action (\`${context.payload.comment.body}\`)](${workflowRun.data.html_url}) cancelled: PR doesn't touch only 1 workspace.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -341,7 +342,7 @@ jobs:
               .filter(j => j.name.startsWith('Update versions on PR'))
               .every(j => j.conclusion === 'success');
 
-            let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            let body = `[Update Versions workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -393,9 +394,9 @@ jobs:
             });
             const success = jobs.data.jobs
               .filter(j => j.name.startsWith('Update commit on PR'))
-              .every(j => j.conclusion === 'success');
+              .every(j => j.conclusion === 'success' || j.conclusion === 'skipped');
 
-            let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            let body = `[Update Versions workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
