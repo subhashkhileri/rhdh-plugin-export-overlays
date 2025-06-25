@@ -91,6 +91,7 @@ jobs:
     name: Publish PR Dynamic Plugin Images
     needs:
       - prepare
+      - checkPRUpToDate
 
     if: github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
 
@@ -116,8 +117,8 @@ jobs:
   add_publish_completion_comment:
     needs:
       - prepare
-      - export
       - checkPRUpToDate
+      - export
 
     permissions:
       statuses: write
@@ -146,7 +147,7 @@ jobs:
               filter: 'latest',
             });
             const success = jobs.data.jobs
-              .filter(j => j.name.startsWith('export') || j.name.startsWith('Check'))
+              .filter(j => j.name.startsWith('Publish') || j.name.startsWith('export') || j.name.startsWith('Check'))
               .every(j => j.conclusion === 'success');
 
             await github.rest.repos.createCommitStatus({
@@ -159,7 +160,7 @@ jobs:
               context: 'publish',
             });
 
-            let body = `Publish workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            let body = `[Publish workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
             const publishedExports = core.getMultilineInput('published_exports');
             if (publishedExports.length > 0) {
               body = `${body}\n- Published container images:`;
@@ -230,7 +231,6 @@ jobs:
     name: Checks whether the PR is up-to-date with versions.json
     needs:
       - prepare
-      - export
     
     permissions:
       statuses: write
@@ -396,7 +396,7 @@ jobs:
               .filter(j => j.name.startsWith('Update commit on PR'))
               .every(j => j.conclusion === 'success' || j.conclusion === 'skipped');
 
-            let body = `[Update Versions workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
+            let body = `[Update Commit workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
