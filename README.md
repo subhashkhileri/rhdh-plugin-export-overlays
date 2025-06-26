@@ -1,3 +1,5 @@
+[![Check Workspace Backstage Compatibility](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml/badge.svg?branch=main&event=push)](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml)
+
 ## What is the rhdh-plugin-export-overlays repository?
 
 The rhdh-plugin-export-overlays repository serves as a metadata and automation hub for managing dynamic plugins for Red Hat Developer Hub (RHDH).

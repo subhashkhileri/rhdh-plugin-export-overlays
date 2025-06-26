@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  export:
+  check:
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
     with:
       overlay-branch: ${{ inputs.overlay-branch }}
