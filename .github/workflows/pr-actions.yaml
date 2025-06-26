@@ -114,11 +114,25 @@ jobs:
       packages: write
       id-token: write
 
+  checkBackstageCompatibility:
+    name: Check workspace backstage compatibility
+    needs:
+      - prepare
+
+    if: github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+
+    uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
+    with:
+      overlay-branch: ${{ needs.prepare.outputs.overlay-branch }}
+      overlay-repo: ${{ needs.prepare.outputs.overlay-repo }}
+      workspace-path: ${{ needs.prepare.outputs.workspace }}
+
   add_publish_completion_comment:
     needs:
       - prepare
       - checkPRUpToDate
       - export
+      - checkBackstageCompatibility
 
     permissions:
       statuses: write

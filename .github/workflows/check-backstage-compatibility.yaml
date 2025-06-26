@@ -1,0 +1,28 @@
+name: Check Workspace Backstage Compatibility 
+on:
+  workflow_dispatch:
+    inputs:
+      workspace-path:
+        description: Relative path of a single workspace on which the export workflow should be applied.
+        required: false
+        type: string
+
+      overlay-branch:
+        description: Branch of the overlay structure
+        type: string
+        required: true
+  
+  push:
+    branches:
+      - 'main'
+  
+concurrency:
+  group: ${{ github.workflow_ref }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export:
+    uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
+    with:
+      overlay-branch: ${{ inputs.overlay-branch }}
+      workspace-path: ${{ inputs.workspace-path }}
