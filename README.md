@@ -1,4 +1,4 @@
-[![Check Workspace Backstage Compatibility](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml/badge.svg?branch=main&event=push)](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml)
+[![Check Workspace Backstage Compatibility](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml/badge.svg?branch=main&event=push)](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml?query=event%3Apush)
 
 ## What is the rhdh-plugin-export-overlays repository?
 
