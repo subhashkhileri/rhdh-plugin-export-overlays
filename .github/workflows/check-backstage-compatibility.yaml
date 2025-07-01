@@ -21,8 +21,67 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-required-plugins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      
+      - name: Create the required-plugins file@
+        continue-on-error: true
+        run: |
+          cat downstream-plugins > required-plugins
+
+      - name: Upload required-plugins file
+        uses: actions/upload-artifact@v4
+        with:
+          name: required-plugins
+          path: required-plugins
+
   check:
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
     with:
       overlay-branch: ${{ inputs.overlay-branch }}
       workspace-path: ${{ inputs.workspace-path }}
+
+  update-badge:
+    needs:
+      - check
+    runs-on: ubuntu-latest
+    steps:      
+      - name: Checkout metadata branch
+        uses: actions/checkout@v4
+        with:
+          ref: metadata
+
+      - name: Update badge Json on the metadata branch.
+        env:
+          INPUT_INCOMPATIBLE_REQUIRED_WORKSPACES: ${{ needs.check.outputs.incompatible-required-workspaces }}
+          INPUT_INCOMPATIBLE_UNREQUIRED_WORKSPACES: ${{ needs.check.outputs.incompatible-unrequired-workspaces }}
+        
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          required=$(echo "${INPUT_INCOMPATIBLE_REQUIRED_WORKSPACES}" | grep -c .)
+          optional=$(echo "${INPUT_INCOMPATIBLE_UNREQUIRED_WORKSPACES}" | grep -c .)
+          cat <<EOF > incompatible-workspaces.json
+            {
+              "schemaVersion": 1,
+              "label": "Target Backstage Compatibility",
+              "message": "$((${optional}+${required})) incompatible workspaces, ${required} of which are mandatory",
+              "color": "$(if [[ ${required} -gt 0 ]]; then echo red; elif [ ${optional} -gt 0 ]; then echo orange; else echo green; fi)"
+            }
+          EOF
+
+          if ! git diff --quiet incompatible-workspaces.json
+          then
+            echo "Commiting changes in file: incompatible-workspaces.json"
+            git add incompatible-workspaces.json
+            git commit -m "Update badge metadata about incompatible workspaces"
+            git push -f origin metadata
+          else
+            echo "No change detected in file: incompatible-workspaces.json"
+          fi
+
+    permissions:
+      contents: write

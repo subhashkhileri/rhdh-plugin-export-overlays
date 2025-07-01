@@ -1,4 +1,6 @@
-[![Check Workspace Backstage Compatibility](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml/badge.svg?branch=main&event=push)](https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml?query=event%3Apush)
+![Target Backstage Compatibility Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fredhat-developer%2Frhdh-plugin-export-overlays%2Frefs%2Fheads%2Fmetadata%2Fincompatible-workspaces.json&style=flat&cacheSeconds=60&link=https://github.com/redhat-developer/rhdh-plugin-export-overlays/actions/workflows/check-backstage-compatibility.yaml?query=event%3Apush+is%3Afailure)
+
+![Publish Images Badge](https://img.shields.io/github/actions/workflow/status/redhat-developer/rhdh-plugin-export-overlays/publish-workspace-plugins.yaml?branch=main&event=push&label=Publish%20RHDH%20Next%20Release%20Dynamic%20Plugin%20Images&link=https%3A%2F%2Fgithub.com%2Fredhat-developer%2Frhdh-plugin-export-overlays%2Factions%2Fworkflows%2Fpublish-workspace-plugins.yaml%3Fquery%3Devent%253Apush)
 
 ## What is the rhdh-plugin-export-overlays repository?
 
