@@ -38,6 +38,9 @@ jobs:
           path: required-plugins
 
   check:
+    needs:
+      - prepare-required-plugins
+
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
     with:
       overlay-branch: ${{ inputs.overlay-branch }}
@@ -47,6 +50,7 @@ jobs:
     needs:
       - check
     runs-on: ubuntu-latest
+    if: always()
     steps:      
       - name: Checkout metadata branch
         uses: actions/checkout@v4
