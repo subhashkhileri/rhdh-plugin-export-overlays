@@ -51,7 +51,7 @@ jobs:
     with:
       overlay-branch: ${{ inputs.overlay-branch }}
       workspace-path: ${{ inputs.workspace-path }}
-      debug: ${{ inputs.debug }}
+      debug: ${{ inputs.debug || false }}
 
   update-badge:
     needs:
