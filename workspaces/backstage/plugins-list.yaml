@@ -19,7 +19,7 @@ plugins/catalog-backend-module-azure:
 plugins/catalog-backend-module-backstage-openapi:
 plugins/catalog-backend-module-bitbucket-cloud:
 plugins/catalog-backend-module-bitbucket-server:
-plugins/catalog-backend-module-gcp:
+plugins/catalog-backend-module-gcp: --embed-package @backstage/plugin-kubernetes-common
 plugins/catalog-backend-module-gerrit:
 plugins/catalog-backend-module-github-org: --embed-package @backstage/plugin-catalog-backend-module-github
 plugins/catalog-backend-module-github:
