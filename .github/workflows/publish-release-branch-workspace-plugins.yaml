@@ -29,6 +29,10 @@ jobs:
               per_page: 50,
             });
             for (const commit of response.data) {
+              if (commit.parents?.length == 1) {
+                core.info(`Skipping commit ${commit.sha}, not a merge commit`);
+                continue;
+              }
               if (context.payload.commits.some(c => c.id === commit.sha)) {
                 core.info(`Skipping commit ${commit.sha}, it's part of the push`);
                 continue;
@@ -38,11 +42,9 @@ jobs:
                 repo: context.repo.repo,
                 ref: commit.sha,
               });
-              if (checksResult.data.total_count === 0) {
-                break;
-              }
               const checks = checksResult.data.check_runs.filter(c => c.name.startsWith('export /'));
               if (checks.length == 0){
+                core.info(`Skipping commit ${commit.sha}, No publish check`);
                 continue;
               }
               if (checks.every(c => c.status === 'completed' && c.conclusion === 'success')) {
@@ -63,6 +65,7 @@ jobs:
       publish-container: true
       image-repository-prefix: ${{ format('ghcr.io/{0}', github.repository) }}
       last-publish-commit: ${{ needs.prepare.outputs.last-published-commit }}
+      image-tag-prefix: ${{ github.ref_name == 'main' && 'next__' || '' }}
 
     secrets:
       image-registry-user: ${{ github.actor }}
