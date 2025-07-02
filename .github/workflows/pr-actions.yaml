@@ -3,15 +3,15 @@ on:
   issue_comment:
     types: [created, edited]
 
-concurrency:
-  group: ${{ github.workflow_ref }}-${{ github.ref_name }}-${{ github.event.issue.number }}-${{ github.event.comment.body }}
-  cancel-in-progress: true
-
 jobs:  
   prepare:
     runs-on: ubuntu-latest
     name: Prepare
 
+    concurrency:
+      group: prepare-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+      
     if: github.event.issue.pull_request && (github.event.comment.body == '/publish' || github.event.comment.body == '/update-versions' || github.event.comment.body == '/update-commit')
     outputs:
       target-branch: ${{ steps.get-branch.outputs.target-branch }}
@@ -93,6 +93,10 @@ jobs:
       - prepare
       - checkPRUpToDate
 
+    concurrency:
+      group: export-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+
     if: github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
 
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/export-workspaces-as-dynamic.yaml@main
@@ -119,6 +123,10 @@ jobs:
     needs:
       - prepare
 
+    concurrency:
+      group: checkBackstageCompatibility-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+
     if: github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
 
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
@@ -133,6 +141,10 @@ jobs:
       - checkPRUpToDate
       - export
       - checkBackstageCompatibility
+
+    concurrency:
+      group: add_publish_completion_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
 
     permissions:
       statuses: write
@@ -200,6 +212,10 @@ jobs:
     needs:
       - prepare
 
+    concurrency:
+      group: add_no_workspace_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+
     if: always() && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace == ''
     runs-on: ubuntu-latest
     steps:
@@ -245,6 +261,10 @@ jobs:
     name: Checks whether the PR is up-to-date with versions.json
     needs:
       - prepare
+
+    concurrency:
+      group: checkPRUpToDate-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
     
     permissions:
       statuses: write
@@ -316,6 +336,11 @@ jobs:
     name: Update versions on PR from release branch
     needs:
       - prepare
+
+    concurrency:
+      group: updatePRWithVersions-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    
     if: github.event.comment.body == '/update-versions'
     uses: ./.github/workflows/update-prs-with-release-branch-commits.yaml
     with:
@@ -331,6 +356,10 @@ jobs:
       - prepare
       - updatePRWithVersions
 
+    concurrency:
+      group: add_update_versions_completion_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    
     permissions:
       pull-requests: write
 
@@ -368,6 +397,11 @@ jobs:
     name: Update commit on PR from automatic discovery
     needs:
       - prepare
+
+    concurrency:
+      group: updatePRWithCommit-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    
     if: github.event.comment.body == '/update-commit'
     uses: ./.github/workflows/update-plugins-repo-refs.yaml
     with:
@@ -385,6 +419,10 @@ jobs:
       - prepare
       - updatePRWithCommit
 
+    concurrency:
+      group: add_update_commit_completion_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    
     permissions:
       pull-requests: write
 
