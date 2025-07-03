@@ -1,0 +1,125 @@
+name: Create Release Branch
+on:
+  workflow_dispatch:
+    inputs:
+      release-branch:
+        description: Name of the release branch that should be created (release-x.x)
+        required: true
+        type: string
+
+      debug:
+        description: Debug the shell scripts
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: ${{ github.workflow_ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare-required-plugins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      
+      - name: Create the required-plugins file@
+        continue-on-error: true
+        run: |
+          cat downstream-plugins > required-plugins
+
+      - name: Upload required-plugins file
+        uses: actions/upload-artifact@v4
+        with:
+          name: required-plugins
+          path: required-plugins
+
+  check:
+    needs:
+      - prepare-required-plugins
+
+    uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
+    with:
+      overlay-branch: main
+      debug: ${{ inputs.debug || false }}
+
+  create:
+    needs:
+      - check
+    runs-on: ubuntu-latest
+    steps:      
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download the required-plugins artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: required-plugins          
+
+      - name: Update badge Json on the metadata branch.
+        env:
+          INPUT_INCOMPATIBLE_UNREQUIRED_WORKSPACES: ${{ needs.check.outputs.incompatible-unrequired-workspaces }}
+          INPUT_RELEASE_BRANCH: ${{ inputs.release-branch }}
+        
+        run: |
+          if [[ "${{ inputs.debug }}" == "true" ]]
+          then
+            set -x
+          fi
+
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git switch -c "${INPUT_RELEASE_BRANCH}"
+
+          IFS=$'\n'
+          for incompatible in ${INPUT_INCOMPATIBLE_UNREQUIRED_WORKSPACES}
+          do
+            echo ::notice ::Removing incompatible workspace: ${incompatible}
+            rm -rfv ${incompatible}
+          done
+
+          missingPlugins=false
+          for required in $(cat required-plugins)
+          do
+            if [[ "$(echo $plugin | sed 's/ *//')" == "" || "$(echo $plugin | sed 's/^#.*//')" == "" ]]
+            then
+                echo "Skip empty or commented line"
+                continue
+            fi
+
+            workspacePath="workspaces/$(echo ${required} | cut -d'/' -f1)"
+            pluginPath="$(echo ${required} | cut -d'/' -f2-)"
+
+            if [[ ! -d "${workspacePath}" ]]
+            then
+              echo ::error ::Required workspace ${workspacePath} is missing.
+              missingPlugins=true
+              continue
+            fi
+
+            if ! grep -q "${pluginPath}:" "${workspacePath}/plugins-list.yaml"
+            then
+              echo ::error ::Required plugin ${pluginPath} of workspace ${workspacePath} is missing.
+              missingPlugins=true
+              continue
+            fi
+          done
+
+          if [[ "${missingPlugins}" == "true"]]
+          then
+            exit 1
+          fi
+
+          create the branch and switch to it
+          if git diff --quiet
+          then
+            git commit -a -m "`Remove incompatible workspaces when creating branch ${INPUT_RELEASE_BRANCH}`."
+          fi
+          git push origin "${INPUT_RELEASE_BRANCH}"
+
+    permissions:
+      contents: write
