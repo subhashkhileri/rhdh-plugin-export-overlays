@@ -3,15 +3,15 @@ on:
   issue_comment:
     types: [created, edited]
 
-concurrency:
-  group: ${{ github.workflow_ref }}-${{ github.ref }}-${{ github.event.issue.id }}
-  cancel-in-progress: true
-
 jobs:  
   prepare:
     runs-on: ubuntu-latest
     name: Prepare
 
+    concurrency:
+      group: prepare-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+      
     if: github.event.issue.pull_request && (github.event.comment.body == '/publish' || github.event.comment.body == '/update-versions' || github.event.comment.body == '/update-commit')
     outputs:
       target-branch: ${{ steps.get-branch.outputs.target-branch }}
@@ -91,6 +91,11 @@ jobs:
     name: Publish PR Dynamic Plugin Images
     needs:
       - prepare
+      - checkPRUpToDate
+
+    concurrency:
+      group: export-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
 
     if: github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
 
@@ -113,11 +118,33 @@ jobs:
       packages: write
       id-token: write
 
+  checkBackstageCompatibility:
+    name: Check workspace backstage compatibility
+    needs:
+      - prepare
+
+    concurrency:
+      group: checkBackstageCompatibility-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+
+    if: github.event.comment.body == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+
+    uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
+    with:
+      overlay-branch: ${{ needs.prepare.outputs.overlay-branch }}
+      overlay-repo: ${{ needs.prepare.outputs.overlay-repo }}
+      workspace-path: ${{ needs.prepare.outputs.workspace }}
+
   add_publish_completion_comment:
     needs:
       - prepare
-      - export
       - checkPRUpToDate
+      - export
+      - checkBackstageCompatibility
+
+    concurrency:
+      group: add_publish_completion_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
 
     permissions:
       statuses: write
@@ -146,7 +173,7 @@ jobs:
               filter: 'latest',
             });
             const success = jobs.data.jobs
-              .filter(j => j.name.startsWith('export') || j.name.startsWith('Check'))
+              .filter(j => j.name.startsWith('Publish') || j.name.startsWith('export') || j.name.startsWith('Export') || j.name.startsWith('Check'))
               .every(j => j.conclusion === 'success');
 
             await github.rest.repos.createCommitStatus({
@@ -159,7 +186,7 @@ jobs:
               context: 'publish',
             });
 
-            let body = `Publish workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            let body = `[Publish workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
             const publishedExports = core.getMultilineInput('published_exports');
             if (publishedExports.length > 0) {
               body = `${body}\n- Published container images:`;
@@ -185,6 +212,10 @@ jobs:
     needs:
       - prepare
 
+    concurrency:
+      group: add_no_workspace_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+
     if: always() && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace == ''
     runs-on: ubuntu-latest
     steps:
@@ -195,12 +226,13 @@ jobs:
 
         with:
           script: |
+            const workflowRun = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: '${{ github.run_id }}'
+            });
+
             if (context.payload.comment.body === '/publish') {
-              const workflowRun = await github.rest.actions.getWorkflowRun({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: '${{ github.run_id }}'
-              });
 
               await github.rest.repos.createCommitStatus({
                 owner: context.repo.owner,
@@ -213,7 +245,7 @@ jobs:
               });
             }
 
-            const body = `PR action (\`${context.payload.comment.body}\`) cancelled: PR doesn't touch only 1 workspace.`;
+            const body = `[PR action (\`${context.payload.comment.body}\`)](${workflowRun.data.html_url}) cancelled: PR doesn't touch only 1 workspace.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -229,7 +261,10 @@ jobs:
     name: Checks whether the PR is up-to-date with versions.json
     needs:
       - prepare
-      - export
+
+    concurrency:
+      group: checkPRUpToDate-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
     
     permissions:
       statuses: write
@@ -248,7 +283,7 @@ jobs:
           script: |
             const path = 'versions.json';
             const releaseBranch = core.getInput('target_branch');
-            if (! releaseBranch?.startsWith('release-')) {
+            if (! releaseBranch?.startsWith('release-') && ! releaseBranch?.startsWith('main') ) {
               core.notice(`Current PR is not based on a release branch.`);
               return;
             }
@@ -301,6 +336,11 @@ jobs:
     name: Update versions on PR from release branch
     needs:
       - prepare
+
+    concurrency:
+      group: updatePRWithVersions-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    
     if: github.event.comment.body == '/update-versions'
     uses: ./.github/workflows/update-prs-with-release-branch-commits.yaml
     with:
@@ -316,6 +356,10 @@ jobs:
       - prepare
       - updatePRWithVersions
 
+    concurrency:
+      group: add_update_versions_completion_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    
     permissions:
       pull-requests: write
 
@@ -341,7 +385,7 @@ jobs:
               .filter(j => j.name.startsWith('Update versions on PR'))
               .every(j => j.conclusion === 'success');
 
-            let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            let body = `[Update Versions workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -353,6 +397,11 @@ jobs:
     name: Update commit on PR from automatic discovery
     needs:
       - prepare
+
+    concurrency:
+      group: updatePRWithCommit-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    
     if: github.event.comment.body == '/update-commit'
     uses: ./.github/workflows/update-plugins-repo-refs.yaml
     with:
@@ -370,6 +419,10 @@ jobs:
       - prepare
       - updatePRWithCommit
 
+    concurrency:
+      group: add_update_commit_completion_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    
     permissions:
       pull-requests: write
 
@@ -393,9 +446,9 @@ jobs:
             });
             const success = jobs.data.jobs
               .filter(j => j.name.startsWith('Update commit on PR'))
-              .every(j => j.conclusion === 'success');
+              .every(j => j.conclusion === 'success' || j.conclusion === 'skipped');
 
-            let body = `Update Versions workflow has completed with ${ success ? 'success' : 'failure' }.`;
+            let body = `[Update Commit workflow](${workflowRun.data.html_url}) has completed with ${ success ? 'success' : 'failure' }.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
