@@ -12,6 +12,12 @@ on:
         type: string
         required: true
   
+      fail-for-required-only:
+        description: Fail only when some required workspaces are incompatible.
+        type: boolean
+        required: false
+        default: false
+
       debug:
         description: Debug the shell scripts
         type: boolean
@@ -52,6 +58,7 @@ jobs:
       overlay-branch: ${{ inputs.overlay-branch }}
       workspace-path: ${{ inputs.workspace-path }}
       debug: ${{ inputs.debug || false }}
+      fail-for-required-only: ${{ inputs.fail-for-required-only || false }}
 
   update-badge:
     needs:
@@ -78,8 +85,10 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
+          set +e
           required=$(echo "${INPUT_INCOMPATIBLE_REQUIRED_WORKSPACES}" | grep -c .)
-          optional=$(echo "${INPUT_INCOMPATIBLE_UNREQUIRED_WORKSPACES}" | grep -c .)
+          optional=$(echo "${INPUT_INCOMPATIBLE_UNREQUIRED_WORKSPACES}" | grep -c .)          
+          set -e
           cat <<EOF > incompatible-workspaces.json
             {
               "schemaVersion": 1,
