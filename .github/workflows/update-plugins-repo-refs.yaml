@@ -82,7 +82,7 @@ on:
     - cron: '0 19 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.inputs.pr-to-update }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ inputs.pr-to-update }}
   cancel-in-progress: true
 
 jobs:
