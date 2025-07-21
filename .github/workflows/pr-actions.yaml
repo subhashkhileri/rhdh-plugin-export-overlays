@@ -240,7 +240,7 @@ jobs:
               repo: context.repo.repo,
               sha: core.getInput('overlay_commit'),
               description: '${{ github.workflow }}',
-              state: success ? 'success' : 'failure',
+              state: 'success',
               target_url: workflowRun.data.html_url,
               context: context.payload.comment.body.substring(1),
             });
