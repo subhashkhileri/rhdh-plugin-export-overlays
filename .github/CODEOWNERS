@@ -8,6 +8,7 @@
 # In VS code: select the lines and select ">Sort Lines Ascending" from the Commands menu.
 
 *                                                                       @davidfestal @gashcrumb @kadel
+/workspaces/*                                                           @christoph-jerolimov @PatAKnight
 /workspaces/3scale                                                      @04kash @AndrienkoAleksandr
 /workspaces/acr                                                         @christoph-jerolimov @ciiay @debsmita1 @divyanshiGupta @its-mitesh-kumar @logonoff
 /workspaces/adoption-insights                                           @rohitkrai03 @karthikjeeyar 
@@ -21,21 +22,23 @@
 /workspaces/keycloak                                                    @AndrienkoAleksandr @schultzp2020 @dzemanov
 /workspaces/lightspeed                                                  @karthikjeeyar @yangcao77 @rohitkrai03
 /workspaces/marketplace                                                 @christoph-jerolimov @ciiay @debsmita1 @divyanshiGupta @gashcrumb @its-mitesh-kumar @logonoff @karthikjeeyar
-/workspaces/nexus-repository-manager                                    @schultzp2020
+/workspaces/nexus-repository-manager                                    @ciiay @debsmita1 @jessicajhee
 /workspaces/npm                                                         @christoph-jerolimov @ciiay @karthikjeeyar
 /workspaces/ocm                                                         @christoph-jerolimov @ciiay @debsmita1 @divyanshiGupta @its-mitesh-kumar @logonoff
 /workspaces/odo                                                         @rm3l
 /workspaces/openshift-image-registry                                    @christoph-jerolimov @ciiay @debsmita1 @divyanshiGupta @gashcrumb @its-mitesh-kumar @logonoff @karthikjeeyar
 /workspaces/orchestrator                                                @batzionb @mareklibra @gciavarrini
 /workspaces/pingidentity                                                @jessicajhee
+/workspaces/quickstart                                                  @divyanshiGupta @christoph-jerolimov @ciiay @debsmita1 @its-mitesh-kumar @logonoff
 /workspaces/rbac                                                        @AndrienkoAleksandr @christoph-jerolimov @divyanshiGupta @PatAKnight @dzemanov
 /workspaces/redhat-resource-optimization                                @christoph-jerolimov
 /workspaces/sandbox                                                     @lucifergene @rohitkrai03 @karthikjeeyar @xcoulon @alexeykazakov @mfrancisc
-/workspaces/scaffolder-backend-module-annotator                         @BethGriggs @debsmita1
-/workspaces/scaffolder-backend-module-kubernetes                        @BethGriggs @debsmita1
+/workspaces/scaffolder-backend-module-annotator                         @debsmita1
+/workspaces/scaffolder-backend-module-kubernetes                        @debsmita1
 /workspaces/scaffolder-backend-module-regex                             @04kash
 /workspaces/scaffolder-backend-module-servicenow                        @schultzp2020
 /workspaces/scaffolder-backend-module-sonarqube                         @04kash @schultzp2020
 /workspaces/scaffolder-relation-processor                               @04kash
+/workspaces/servicenow                                                  @AndrienkoAleksandr @ciiay @PatAKnight @christoph-jerolimov
 /workspaces/theme                                                       @christoph-jerolimov @ciiay @debsmita1 @divyanshiGupta @gashcrumb @its-mitesh-kumar @logonoff
 /workspaces/topology                                                    @christoph-jerolimov @ciiay @debsmita1 @divyanshiGupta @its-mitesh-kumar @logonoff
