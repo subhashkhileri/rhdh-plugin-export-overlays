@@ -52,6 +52,10 @@ marketplace/plugins/marketplace
 marketplace/plugins/marketplace-backend
 global-floating-action-button/plugins/global-floating-action-button
 global-header/plugins/global-header
+quickstart/plugins/quickstart
+adoption-insights/plugins/adoption-insights
+adoption-insights/plugins/adoption-insights-backend
+adoption-insights/plugins/analytics-module-adoption-insights
 
 # @immobiliarelabs/backstage-plugin-gitlab*
 gitlab/packages/gitlab
