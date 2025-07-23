@@ -3,28 +3,6 @@
 
 # TODO: convert these to plugin paths once they're included in the overlay repo at
 # https://github.com/redhat-developer/rhdh-plugin-export-overlays/tree/release-1.y/workspaces
-# @immobiliarelabs/backstage-plugin-gitlab
-# @immobiliarelabs/backstage-plugin-gitlab-backend
-# @pagerduty/backstage-plugin
-# @pagerduty/backstage-plugin-backend
-# @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
-# @red-hat-developer-hub/backstage-plugin-bulk-import
-# @red-hat-developer-hub/backstage-plugin-bulk-import-backend
-# @red-hat-developer-hub/backstage-plugin-catalog-backend-module-marketplace
-# @red-hat-developer-hub/backstage-plugin-global-floating-action-button
-# @red-hat-developer-hub/backstage-plugin-global-header
-# @red-hat-developer-hub/backstage-plugin-marketplace
-# @red-hat-developer-hub/backstage-plugin-marketplace-backend
-# @roadiehq/backstage-plugin-argo-cd
-# @roadiehq/backstage-plugin-argo-cd-backend
-# @roadiehq/backstage-plugin-datadog
-# @roadiehq/backstage-plugin-github-insights
-# @roadiehq/backstage-plugin-github-pull-requests
-# @roadiehq/backstage-plugin-jira
-# @roadiehq/backstage-plugin-security-insights
-# @roadiehq/scaffolder-backend-argocd
-# @roadiehq/scaffolder-backend-module-http-request
-# @roadiehq/scaffolder-backend-module-utils
 
 3scale/plugins/3scale-backend
 acr/plugins/acr
@@ -33,7 +11,7 @@ azure-devops/plugins/azure-devops-backend
 azure-devops/plugins/azure-devops
 # no wrapper exists yet
 # azure-devops/plugins/catalog-backend-module-azure-devops-annotator-processor
-azure-devops/plugins/scaffolder-backend-module-azure-devops
+# azure-devops/plugins/scaffolder-backend-module-azure-devops
 
 backstage/plugins/catalog-backend-module-bitbucket-cloud
 backstage/plugins/catalog-backend-module-bitbucket-server
@@ -56,6 +34,10 @@ backstage/plugins/scaffolder-backend-module-github
 backstage/plugins/scaffolder-backend-module-gitlab
 backstage/plugins/signals
 backstage/plugins/signals-backend
+backstage/plugins/techdocs
+backstage/plugins/techdocs-backend
+backstage/plugins/techdocs-module-addons-contrib:
+
 scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
 keycloak/plugins/catalog-backend-module-keycloak
 pingidentity/plugins/catalog-backend-module-pingidentity
@@ -63,6 +45,53 @@ dynatrace/plugins/dynatrace
 github-actions/plugins/github-actions
 github-issues/plugins/github-issues
 homepage/plugins/dynamic-home-page
+bulk-import/plugins/bulk-import
+bulk-import/plugins/bulk-import-backend
+marketplace/plugins/catalog-backend-module-marketplace
+marketplace/plugins/marketplace
+marketplace/plugins/marketplace-backend
+global-floating-action-button/plugins/global-floating-action-button
+global-header/plugins/global-header
+
+# @immobiliarelabs/backstage-plugin-gitlab*
+gitlab/packages/gitlab
+gitlab/packages/gitlab-backend
+
+# @pagerduty/backstage-plugin
+pagerduty-frontend
+# @pagerduty/backstage-plugin-backend
+pagerduty-backend
+
+# @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
+scaffolder-backend-module-azure-repositories
+
+# @roadiehq/backstage-plugin-argo-cd - not as a wrapper: replaced by redhat-argocd
+# @roadiehq/backstage-plugin-argo-cd-backend
+roadie-backstage-plugins/plugins/backend/backstage-plugin-argo-cd-backend
+
+# @roadiehq/backstage-plugin-datadog
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-datadog
+
+# @roadiehq/backstage-plugin-github-insights
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
+
+# @roadiehq/backstage-plugin-github-pull-requests
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-pull-requests
+
+# @roadiehq/backstage-plugin-jira
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-jira
+
+# @roadiehq/backstage-plugin-security-insights
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-security-insights
+
+# @roadiehq/scaffolder-backend-argocd
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-argocd
+
+# @roadiehq/scaffolder-backend-module-http-request
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-http-request
+
+# @roadiehq/scaffolder-backend-module-utils
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
 
 # no wrapper exists yet
 # jenkins/plugins/scaffolder-backend-module-jenkins
