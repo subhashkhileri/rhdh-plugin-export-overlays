@@ -26,7 +26,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: core.getInput('release_branch'),
-              per_page: 50,
+              per_page: 100,
             });
             for (const commit of response.data) {
               if (commit.parents?.length == 1) {
@@ -37,17 +37,21 @@ jobs:
                 core.info(`Skipping commit ${commit.sha}, it's part of the push`);
                 continue;
               }
-              const checksResult = await github.rest.checks.listForRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: commit.sha,
-              });
-              const checks = checksResult.data.check_runs.filter(c => c.name.startsWith('export /'));
-              if (checks.length == 0){
+              const commitChecks = await github.paginate(
+                github.rest.checks.listForRef, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: commit.sha,
+                },
+                (response) => response.data.check_runs
+              );
+
+              const exportChecks = commitChecks.filter(c => c.name.startsWith('export /'));
+              if (exportChecks.length == 0){
                 core.info(`Skipping commit ${commit.sha}, No publish check`);
                 continue;
               }
-              if (checks.every(c => c.status === 'completed' && c.conclusion === 'success')) {
+              if (exportChecks.every(c => c.status === 'completed' && c.conclusion === 'success')) {
                 core.info(`Last published commit to compare with: ${commit.sha}`);
                 core.setOutput('last-published-commit', commit.sha);
                 return;
