@@ -43,7 +43,7 @@ jobs:
                   repo: context.repo.repo,
                   ref: commit.sha,
                 },
-                (response) => response.data.check_runs
+                (response) => response.data.check_runs || []
               );
 
               const exportChecks = commitChecks.filter(c => c.name.startsWith('export /'));
