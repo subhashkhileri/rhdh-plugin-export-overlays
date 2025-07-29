@@ -36,7 +36,7 @@ backstage/plugins/signals
 backstage/plugins/signals-backend
 backstage/plugins/techdocs
 backstage/plugins/techdocs-backend
-backstage/plugins/techdocs-module-addons-contrib:
+backstage/plugins/techdocs-module-addons-contrib
 
 scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
 keycloak/plugins/catalog-backend-module-keycloak
