@@ -43,10 +43,13 @@ jobs:
                   repo: context.repo.repo,
                   ref: commit.sha,
                 },
-                (response) => response.data.check_runs || []
+                (response) => {
+                  core.info(`response: ${JSON.stringify(response)}`);
+                  return response.data.check_runs || [];
+                }
               );
 
-              core.info(commitChecks.map(c => c.name).join(','));
+              core.info(`Commit checks: ${commitChecks.map(c => c.name).join(',')}`);
               const exportChecks = commitChecks.filter(c => c.name.startsWith('export /') || c.name.endsWith(' / Export'));
               if (exportChecks.length == 0){
                 core.info(`Skipping commit ${commit.sha}, No publish check`);
