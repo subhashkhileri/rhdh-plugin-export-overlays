@@ -46,7 +46,7 @@ jobs:
               );
 
               core.info(`Commit checks: ${commitChecks.map(c => c.name).join(',')}`);
-              const exportChecks = commitChecks.filter(c => c.name.startsWith('export /') || c.name.endsWith(' / Export'));
+              const exportChecks = commitChecks.filter(c => c.name.startsWith('export /'));
               if (exportChecks.length == 0){
                 core.info(`Skipping commit ${commit.sha}, No publish check`);
                 continue;
