@@ -1,0 +1,14 @@
+diff --git a/package.json b/package.json
+index a6b19ea..48517e3 100644
+--- a/package.json
++++ b/package.json
+@@ -56,5 +56,8 @@
+   "devDependencies": {},
+   "files": [
+     "dist"
+-  ]
++  ],
++  "resolutions": {
++    "@backstage/plugin-scaffolder-backend": "1.30.0"
++  }
+ }
