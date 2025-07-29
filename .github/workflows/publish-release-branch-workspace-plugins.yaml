@@ -44,7 +44,7 @@ jobs:
                   ref: commit.sha,
                 },
                 (response) => {
-                  core.info(`response: ${JSON.stringify(response)}`);
+                  core.info(`response data: ${JSON.stringify(response.data)}`);
                   return response.data.check_runs || [];
                 }
               );
