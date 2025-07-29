@@ -62,12 +62,12 @@ gitlab/packages/gitlab
 gitlab/packages/gitlab-backend
 
 # @pagerduty/backstage-plugin
-pagerduty-frontend
+pagerduty-frontend/.
 # @pagerduty/backstage-plugin-backend
-pagerduty-backend
+pagerduty-backend/.
 
 # @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
-scaffolder-backend-module-azure-repositories
+scaffolder-backend-module-azure-repositories/.
 
 # @roadiehq/backstage-plugin-argo-cd - not as a wrapper: replaced by redhat-argocd
 # @roadiehq/backstage-plugin-argo-cd-backend
