@@ -1,14 +1,13 @@
 diff --git a/package.json b/package.json
-index a6b19ea..48517e3 100644
+index a6b19ea..39bdc78 100644
 --- a/package.json
 +++ b/package.json
-@@ -56,5 +56,8 @@
-   "devDependencies": {},
-   "files": [
-     "dist"
--  ]
-+  ],
-+  "resolutions": {
-+    "@backstage/plugin-scaffolder-backend": "1.30.0"
-+  }
- }
+@@ -47,7 +47,7 @@
+     "@backstage/config": "^1.2.0",
+     "@backstage/errors": "^1.2.3",
+     "@backstage/integration": "^1.8.0",
+-    "@backstage/plugin-scaffolder-backend": "^1.22.6",
++    "@backstage/plugin-scaffolder-backend": "1.30.0",
+     "@backstage/plugin-scaffolder-node": "^0.2.9",
+     "@backstage/types": "^1.1.1",
+     "azure-devops-node-api": "^13.0.0",
