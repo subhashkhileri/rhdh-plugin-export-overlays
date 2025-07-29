@@ -46,6 +46,7 @@ jobs:
                 (response) => response.data.check_runs || []
               );
 
+              core.info(commitChecks.map(c => c.name).join(','));
               const exportChecks = commitChecks.filter(c => c.name.startsWith('export /') || c.name.endsWith(' / Export'));
               if (exportChecks.length == 0){
                 core.info(`Skipping commit ${commit.sha}, No publish check`);
