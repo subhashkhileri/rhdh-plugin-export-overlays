@@ -42,10 +42,6 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   ref: commit.sha,
-                },
-                (response) => {
-                  core.info(`response data: ${JSON.stringify(response.data)}`);
-                  return response.data.check_runs || [];
                 }
               );
 
