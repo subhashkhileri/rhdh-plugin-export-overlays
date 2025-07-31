@@ -137,8 +137,8 @@ jobs:
     with:
       regexps: ${{ needs.prepare.outputs.regexps }}
       workspace-path: ${{ inputs.workspace-path }}
-      overlay-repo: ${{ github.repository }}      
-      release-branch-pattern: ^release-(1\.5|1\.6|1\.7)$
+      overlay-repo: ${{ github.repository }}
+      release-branch-pattern: ^release-(1\.6|1\.7)$
       verbose: ${{ inputs.verbose != '' && inputs.verbose }}
       debug: ${{ inputs.debug != '' && inputs.debug }}
       allow-workspace-addition: false
