@@ -144,7 +144,7 @@ jobs:
                 | "^release-(" + join("|") + ")$"')"
           fi
           echo "Release branch pattern: ${RELEASE_BRANCH_PATTERN}"
-          echo "RELEASE_BRANCH_PATTERN=$(echo $RELEASE_BRANCH_PATTERN)" >> $GITHUB_OUTPUT
+          echo "RELEASE_BRANCH_PATTERN=${RELEASE_BRANCH_PATTERN}" >> $GITHUB_OUTPUT
 
   update-branches:
     name: Update Branches
