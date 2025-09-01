@@ -10,6 +10,7 @@ jobs:
     if: github.event.issue.pull_request
     outputs:
       command_name: ${{ steps.extract.outputs.command_name }}
+      error_message: ${{ steps.extract.outputs.error_message }}
     steps:
       - name: Extract command from comment
         id: extract
@@ -22,8 +23,49 @@ jobs:
               .map(l => l.trim())
               .filter(l => l.length > 0);
             const allowed = new Set(['/publish', '/update-versions', '/update-commit']);
-            const firstMatching = lines.find(l => allowed.has(l)) || '';
+            const matchingCommands = lines.filter(l => allowed.has(l));
+            
+            if (matchingCommands.length > 1) {
+              const errorMsg = `Multiple commands found in comment: ${matchingCommands.join(', ')}. Please use only one command per comment.`;
+              core.setOutput('error_message', errorMsg);
+              core.setOutput('command_name', '');
+              core.setFailed(errorMsg);
+              return;
+            }
+            
+            const firstMatching = matchingCommands[0] || '';
             core.setOutput('command_name', firstMatching.startsWith('/') ? firstMatching.slice(1) : firstMatching);
+            core.setOutput('error_message', '');
+
+  add_error_comment:
+    needs:
+      - parse
+
+    concurrency:
+      group: add_error_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+
+    permissions:
+      pull-requests: write
+
+    if: always() && needs.parse.outputs.error_message != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add error comment
+        uses: actions/github-script@v7
+        env:
+          INPUT_ERROR_MESSAGE: ${{ needs.parse.outputs.error_message }}
+        with:
+          script: |
+            const errorMessage = core.getInput('error_message');
+            const body = `**Error**: ${errorMessage}\n\nValid commands are:\n- \`/publish\` - Publish dynamic plugin images\n- \`/update-versions\` - Update versions from release branch\n- \`/update-commit\` - Update commit from automatic discovery`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
   prepare:
     runs-on: ubuntu-latest
     name: Prepare
