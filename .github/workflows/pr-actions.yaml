@@ -9,7 +9,6 @@ jobs:
     name: Parse PR Comment
     if: github.event.issue.pull_request
     outputs:
-      command: ${{ steps.extract.outputs.command }}
       command_name: ${{ steps.extract.outputs.command_name }}
     steps:
       - name: Extract command from comment
@@ -24,7 +23,6 @@ jobs:
               .filter(l => l.length > 0);
             const allowed = new Set(['/publish', '/update-versions', '/update-commit']);
             const firstMatching = lines.find(l => allowed.has(l)) || '';
-            core.setOutput('command', firstMatching);
             core.setOutput('command_name', firstMatching.startsWith('/') ? firstMatching.slice(1) : firstMatching);
   prepare:
     runs-on: ubuntu-latest
@@ -36,7 +34,7 @@ jobs:
       group: prepare-${{ github.ref_name }}-${{ github.event.issue.number }}
       cancel-in-progress: false
       
-    if: needs.parse.outputs.command != ''
+    if: needs.parse.outputs.command_name != ''
     outputs:
       target-branch: ${{ steps.get-branch.outputs.target-branch }}
       overlay-branch: ${{ steps.get-branch.outputs.overlay-branch }}
@@ -122,7 +120,7 @@ jobs:
       group: export-${{ github.ref_name }}-${{ github.event.issue.number }}
       cancel-in-progress: true
 
-    if: needs.parse.outputs.command == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    if: needs.parse.outputs.command_name == 'publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
 
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/export-workspaces-as-dynamic.yaml@main
     with:
@@ -153,7 +151,7 @@ jobs:
       group: checkBackstageCompatibility-${{ github.ref_name }}-${{ github.event.issue.number }}
       cancel-in-progress: true
 
-    if: needs.parse.outputs.command == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    if: needs.parse.outputs.command_name == 'publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
 
     uses: redhat-developer/rhdh-plugin-export-utils/.github/workflows/check-backstage-compatibility.yaml@main
     with:
@@ -177,7 +175,7 @@ jobs:
       statuses: write
       pull-requests: write
 
-    if: always() && needs.parse.outputs.command == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    if: always() && needs.parse.outputs.command_name == 'publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
     runs-on: ubuntu-latest
     steps:
       - name: Add completion comment
@@ -258,7 +256,6 @@ jobs:
         env:
           INPUT_OVERLAY_COMMIT: ${{ needs.prepare.outputs.overlay-commit }}
           INPUT_COMMAND_NAME: ${{ needs.parse.outputs.command_name }}
-          INPUT_COMMAND: ${{ needs.parse.outputs.command }}
 
         with:
           script: |
@@ -278,7 +275,7 @@ jobs:
               context: core.getInput('command_name'),
             });
 
-            const body = `[PR action (\`${core.getInput('command')}\`)](${workflowRun.data.html_url}) cancelled: PR doesn't touch only 1 workspace.`;
+            const body = `[PR action (\`/${core.getInput('command_name')}\`)](${workflowRun.data.html_url}) cancelled: PR doesn't touch only 1 workspace.`;
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -300,7 +297,7 @@ jobs:
       statuses: write
       pull-requests: write
   
-    if: always() && needs.parse.outputs.command == '/publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    if: always() && needs.parse.outputs.command_name == 'publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
     runs-on: ubuntu-latest
     steps:
       - name: Add update check comment
@@ -372,7 +369,7 @@ jobs:
       group: updatePRWithVersions-${{ github.ref_name }}-${{ github.event.issue.number }}
       cancel-in-progress: true
     
-    if: needs.parse.outputs.command == '/update-versions'
+    if: needs.parse.outputs.command_name == 'update-versions'
     uses: ./.github/workflows/update-prs-with-release-branch-commits.yaml
     with:
       force: true
@@ -396,7 +393,7 @@ jobs:
       statuses: write
       pull-requests: write
 
-    if: always() && needs.parse.outputs.command == '/update-versions' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    if: always() && needs.parse.outputs.command_name == 'update-versions' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
     runs-on: ubuntu-latest
     steps:
       - name: Add completion comment
@@ -450,7 +447,7 @@ jobs:
       group: updatePRWithCommit-${{ github.ref_name }}-${{ github.event.issue.number }}
       cancel-in-progress: true
     
-    if: needs.parse.outputs.command == '/update-commit'
+    if: needs.parse.outputs.command_name == 'update-commit'
     uses: ./.github/workflows/update-plugins-repo-refs.yaml
     with:
       single-branch: ${{ needs.prepare.outputs.target-branch }}
@@ -476,7 +473,7 @@ jobs:
       statuses: write
       pull-requests: write
 
-    if: always() && needs.parse.outputs.command == '/update-commit' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    if: always() && needs.parse.outputs.command_name == 'update-commit' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
     runs-on: ubuntu-latest
     steps:
       - name: Add completion comment
