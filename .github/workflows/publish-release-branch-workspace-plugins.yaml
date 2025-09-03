@@ -69,9 +69,9 @@ jobs:
       image-repository-prefix: ${{ format('ghcr.io/{0}', github.repository) }}
       last-publish-commit: ${{ needs.prepare.outputs.last-published-commit }}
       image-tag-prefix: ${{ github.ref_name == 'main' && 'next__' || '' }}
+      image-registry-user: ${{ github.actor }}
 
     secrets:
-      image-registry-user: ${{ github.actor }}
       image-registry-password: ${{ secrets.GITHUB_TOKEN }}
   
     permissions:
