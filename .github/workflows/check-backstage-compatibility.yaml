@@ -115,7 +115,7 @@ jobs:
     needs:
       - check
     runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main'
+    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/RHIDP-8649')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -243,12 +243,21 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Copy the generated markdown to wiki
-          cp ../compatibility-report.md "Backstage-Compatibility-Report.md"
+          # Copy the generated markdown to wiki (use test name for testing branches)
+          if [ "${{ github.ref }}" = "refs/heads/feat/RHIDP-8649" ]; then
+            cp ../compatibility-report.md "Backstage-Compatibility-Report-TEST.md"
+          else
+            cp ../compatibility-report.md "Backstage-Compatibility-Report.md"
+          fi
           
           # Check if there are changes
           if ! git diff --quiet; then
-            git add "Backstage-Compatibility-Report.md"
+            # Add the appropriate file based on branch
+            if [ "${{ github.ref }}" = "refs/heads/feat/RHIDP-8649" ]; then
+              git add "Backstage-Compatibility-Report-TEST.md"
+            else
+              git add "Backstage-Compatibility-Report.md"
+            fi
             
             # Calculate counts for commit message
             required_count=$(echo "${INPUT_INCOMPATIBLE_REQUIRED_WORKSPACES}" | wc -w)
