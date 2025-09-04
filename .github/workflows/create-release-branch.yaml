@@ -134,9 +134,9 @@ jobs:
       publish-container: true
       image-repository-prefix: ${{ format('ghcr.io/{0}', github.repository) }}
       overlay-branch: ${{ inputs.release-branch }}
+      image-registry-user: ${{ github.actor }}
 
     secrets:
-      image-registry-user: ${{ github.actor }}
       image-registry-password: ${{ secrets.GITHUB_TOKEN }}
   
     permissions:

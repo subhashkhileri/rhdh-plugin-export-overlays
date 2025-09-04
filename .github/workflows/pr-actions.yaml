@@ -172,9 +172,9 @@ jobs:
       publish-container: true
       image-repository-prefix: ${{ format('ghcr.io/{0}', github.repository) }}
       image-tag-prefix: ${{ format('pr_{0}__', needs.prepare.outputs.pr-number) }}
+      image-registry-user: ${{ github.actor }}
 
     secrets:
-      image-registry-user: ${{ github.actor }}
       image-registry-password: ${{ secrets.GITHUB_TOKEN }}
 
     permissions:

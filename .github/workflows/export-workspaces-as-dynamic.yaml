@@ -2,15 +2,16 @@ name: Export Workspace as Dynamic Plugins Packages
 on:
   workflow_call:
     secrets:
-      image-registry-user:
-        description: User name to be used to push to container image registry
-        required: false
-
       image-registry-password:
         description: Password to be used to push to container image registry
         required: false
 
     inputs:
+      image-registry-user:
+        description: User name to be used to push to container image registry
+        type: string
+        required: false
+
       node-version:
         description: node-version to execute the export
         type: string
@@ -127,9 +128,9 @@ jobs:
       workspace-path: ${{ inputs.workspace-path }}
       publish-container: ${{ inputs.publish-container }}
       image-repository-prefix: ${{ inputs.image-repository-prefix }}
+      image-registry-user: ${{ inputs.image-registry-user || github.actor }}
       
     secrets:
-      image-registry-user: ${{ secrets.image-registry-user || github.actor }}
       image-registry-password: ${{ secrets.image-registry-password || secrets.GITHUB_TOKEN }}
 
     permissions:
