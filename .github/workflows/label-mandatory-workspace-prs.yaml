@@ -51,12 +51,31 @@ jobs:
               return requiredPlugins.some(pluginLine => pluginLine.startsWith(`${workspace}/`));
             }
             
+            // function to check if a workspace directory exists on the target branch
+            async function workspaceExistsOnTargetBranch(workspace, targetBranch) {
+              try {
+                await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path: `workspaces/${workspace}`,
+                  ref: targetBranch
+                });
+                return true;
+              } catch (error) {
+                if (error.status === 404) {
+                  return false;
+                }
+                throw error;
+              }
+            }
+            
             // Define the labels we'll apply
             const LABELS = {
               UPDATE: 'workspace-update', 
               ADDITION: 'workspace-addition',
-              OUTSIDE: 'outside-workspaces',
-              MANDATORY: 'mandatory-workspace'
+              OUTSIDE: 'non-workspace-changes',
+              MANDATORY: 'mandatory-workspace',
+              RELEASE_PATCH: 'release-branch-patch'
             };
             
             // Ensure all labels exist
@@ -86,6 +105,10 @@ jobs:
                     case 'MANDATORY':
                       description = 'PR affects a workspace with required plugins for releases';
                       color = 'd73a4a';  // Red
+                      break;
+                    case 'RELEASE_PATCH':
+                      description = 'PR modifies workspace on a release branch';
+                      color = 'fbca04';  // Yellow
                       break;
                   }
                   
@@ -133,34 +156,38 @@ jobs:
                 // Categorize files
                 const workspaceFiles = [];
                 const nonWorkspaceFiles = [];
-                const addedWorkspaces = new Set();
-                const modifiedWorkspaces = new Set();
+                const allAffectedWorkspaces = new Set();
                 
                 for (const file of prFiles.data) {
                   const workspaceMatch = file.filename.match(/^workspaces\/([^\/]+)\/.*/);
                   if (workspaceMatch) {
                     const workspace = workspaceMatch[1];
                     workspaceFiles.push({ file, workspace });
-                    
-                    // Check if this is a new workspace
-                    if (file.status === 'added') {
-                      addedWorkspaces.add(workspace);
-                    } else {
-                      modifiedWorkspaces.add(workspace);
-                    }
+                    allAffectedWorkspaces.add(workspace);
                   } else {
                     nonWorkspaceFiles.push(file);
                   }
                 }
                 
-                // Remove workspaces from addedWorkspaces if they also have modifications
-                for (const workspace of modifiedWorkspaces) {
-                  addedWorkspaces.delete(workspace);
+                const newWorkspaces = new Set();
+                const existingWorkspaces = new Set();
+                
+                for (const workspace of allAffectedWorkspaces) {
+                  const exists = await workspaceExistsOnTargetBranch(workspace, pr.base.ref);
+                  if (exists) {
+                    existingWorkspaces.add(workspace);
+                    console.log(`Workspace ${workspace} exists on ${pr.base.ref} - treating as update`);
+                  } else {
+                    newWorkspaces.add(workspace);
+                    console.log(`Workspace ${workspace} doesn't exist on ${pr.base.ref} - treating as addition`);
+                  }
                 }
                 
                 // Determine label(s)
                 let targetLabels = [];
                 let logMessage = `PR #${pr.number}`;
+                const isMainBranch = pr.base.ref === 'main';
+                const isReleaseBranch = pr.base.ref.startsWith('release-');
                 
                 if (workspaceFiles.length === 0) {
                   // No workspace files changed - outside workspaces
@@ -168,13 +195,14 @@ jobs:
                   logMessage += ` affects only non-workspace files`;
                   
                 } else {
-                  const allAffectedWorkspaces = new Set([...addedWorkspaces, ...modifiedWorkspaces]);
+                  const totalAffectedWorkspaces = newWorkspaces.size + existingWorkspaces.size;
                   
-                  if (allAffectedWorkspaces.size === 1) {
-                    // Single workspace affected
-                    const workspace = Array.from(allAffectedWorkspaces)[0];
+                  if (totalAffectedWorkspaces === 1) {
+                    const workspace = newWorkspaces.size === 1 
+                      ? Array.from(newWorkspaces)[0]
+                      : Array.from(existingWorkspaces)[0];
                     
-                    if (addedWorkspaces.has(workspace)) {
+                    if (newWorkspaces.has(workspace)) {
                       targetLabels = [LABELS.ADDITION];
                       logMessage += ` adds new workspace: ${workspace}`;
                     } else {
@@ -182,15 +210,19 @@ jobs:
                       logMessage += ` updates workspace: ${workspace}`;
                     }
                     
-                    // Check if this workspace contains required plugins
-                    if (workspaceHasRequiredPlugins(workspace)) {
+                    // Add branch-specific labels
+                    if (isMainBranch && workspaceHasRequiredPlugins(workspace)) {
                       targetLabels.push(LABELS.MANDATORY);
-                      logMessage += ` (contains required plugins)`;
+                      logMessage += ` (contains required plugins, main branch)`;
+                    } else if (isReleaseBranch) {
+                      targetLabels.push(LABELS.RELEASE_PATCH);
+                      logMessage += ` (release branch patch)`;
                     }
                   } else {
                     // Multiple workspaces affected - this should not be labeled for publishing at least from what i understand
                     targetLabels = []; // No specific labels
-                    logMessage += ` affects multiple workspaces: ${Array.from(allAffectedWorkspaces).join(', ')}`;
+                    const allWorkspaceNames = [...newWorkspaces, ...existingWorkspaces];
+                    logMessage += ` affects multiple workspaces: ${allWorkspaceNames.join(', ')}`;
                     
                     // Note: we intentionally don't label multi-workspace PRs as they can't be published or they are hard to publish after talk with david
                   }
