@@ -4,17 +4,14 @@ on:
   workflow_run:
     workflows: [Pull Request Actions]
     types: [completed]
-  repository_dispatch:
-    types: [workspace-tests]
 
 jobs:
   resolve:
-    if: ${{ github.event_name == 'repository_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
-      pull-requests: read
     outputs:
       workspace: ${{ steps.meta.outputs.workspace }}
       overlayBranch: ${{ steps.meta.outputs.overlayBranch }}
@@ -49,5 +46,11 @@ jobs:
     with:
       overlay-branch: ${{ needs.resolve.outputs.overlayBranch }}
       overlay-repo: ${{ needs.resolve.outputs.overlayRepo }}
+      workspace-path: ${{ needs.resolve.outputs.workspace }}
+
+  integration-tests:
+    needs: prepare-test-config
+    uses: ./.github/workflows/run-plugin-integration-tests.yaml
+    with:
       workspace-path: ${{ needs.resolve.outputs.workspace }}
 

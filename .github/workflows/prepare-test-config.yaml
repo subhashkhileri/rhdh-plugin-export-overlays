@@ -41,7 +41,10 @@ jobs:
           if_no_artifact_found: warn
           allow_forks: true
 
-      - name: Parse config and update OCI references
+      - name: Setup yq
+        uses: mikefarah/yq@v4
+
+      - name: Build dynamic-plugins.test.yaml
         run: |
           WORKSPACE_PATH="${{ inputs.workspace-path }}"
           PUBLISHED_EXPORTS=""
@@ -61,9 +64,31 @@ jobs:
           OUT_FILE="$OUT_DIR/dynamic-plugins.test.yaml"
           mkdir -p "$OUT_DIR"
 
-          # Install yq for YAML processing
-          sudo curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq
-          sudo chmod +x /usr/local/bin/yq
+          # Build map of <stripped packageName> -> metadata file path
+          declare -A META_MAP
+          for file in "$WORKSPACE_PATH"/metadata/*.yaml; do
+            [ -e "$file" ] || continue
+            pkg=$(yq -r '.packageName // ""' "$file")
+            if [ -n "$pkg" ]; then
+              stripped=$(echo "$pkg" | sed 's|^@||; s|/|-|')
+              META_MAP["$stripped"]="$file"
+            fi
+          done
+
+          # Always include the root-level default config
+          ROOT_CONFIG="$GITHUB_WORKSPACE/tests/app-config.yaml"
+          if [ -f "$ROOT_CONFIG" ]; then
+            echo "Copying root app-config.yaml into artifact"
+            cp "$ROOT_CONFIG" "$OUT_DIR/app-config.yaml"
+          else
+            echo "Root-level tests/app-config.yaml not found at $ROOT_CONFIG"
+          fi
+
+          # copy optional workspace-level test configs into artefact
+          [ -f "$WORKSPACE_PATH/tests/app-config.test.yaml" ] && cp "$WORKSPACE_PATH/tests/app-config.test.yaml" "$OUT_DIR/"
+          [ -f "$WORKSPACE_PATH/tests/test.env" ] && cp "$WORKSPACE_PATH/tests/test.env" "$OUT_DIR/"
+
+          echo "Contents of $OUT_DIR after copy:" && ls -la "$OUT_DIR"
 
           # Start the resulting YAML file
           echo "plugins:" > "$OUT_FILE"          
@@ -76,10 +101,9 @@ jobs:
               IMAGE_PATH_AND_PLUGIN="${BASH_REMATCH[1]}"   # <repo_path>/<plugin_name>
               NEW_TAG="${BASH_REMATCH[2]}"                 # <tag>
               PLUGIN_NAME="${IMAGE_PATH_AND_PLUGIN##*/}"
-
-              METADATA_FILE="$WORKSPACE_PATH/metadata/${PLUGIN_NAME}.yaml"
-              if [ ! -f "$METADATA_FILE" ]; then
-                echo "Metadata file not found for $PLUGIN_NAME at $METADATA_FILE, skipping"
+              METADATA_FILE="${META_MAP[$PLUGIN_NAME]}"
+              if [ -z "$METADATA_FILE" ]; then
+                echo "Metadata mapping not found for $PLUGIN_NAME, skipping"
                 continue
               fi
 
@@ -95,7 +119,8 @@ jobs:
                 continue
               fi
 
-              echo "- package: \"oci://ghcr.io/${IMAGE_PATH_AND_PLUGIN}:${NEW_TAG}!${PACKAGE_NAME}\"" >> "$OUT_FILE"
+              STRIPPED=$(echo "$PACKAGE_NAME" | sed 's|^@||; s|/|-|')
+              echo "- package: \"oci://ghcr.io/${IMAGE_PATH_AND_PLUGIN}:${NEW_TAG}!${STRIPPED}\"" >> "$OUT_FILE"
               echo "  disabled: false" >> "$OUT_FILE"
               echo "  pluginConfig:" >> "$OUT_FILE"
               echo "    dynamicPlugins:" >> "$OUT_FILE"
@@ -106,9 +131,9 @@ jobs:
             fi
           done
 
-      - name: Upload the config as workflow artifact
+      - name: Upload integration-test artefact
         uses: actions/upload-artifact@v4
         with:
-          name: dynamic-plugins-test
-          path: ${{ format('{0}/tests/dynamic-plugins.test.yaml', inputs.workspace-path) }}
-          if-no-files-found: ignore
+          name: integration-test-artifacts
+          path: ${{ format('{0}/tests', inputs.workspace-path) }}
+          if-no-files-found: error
