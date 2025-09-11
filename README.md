@@ -50,7 +50,7 @@ The compatibility status is displayed by the badge at the top of this README.
 
 ### Best-Effort Version Matching
 
-When searching for plugin versions compatible with the target Backstage version, the automation isn't strictly limited to the exact Backstage version (e.g. `1.39.0` for a `1.39.1` target backstage version). It performs a best-effort search to find the closest compatible version, which could still be `1.38.0` for a `1.39.1` target backstage version.
+When searching for plugin versions compatible with the target Backstage version, the automation isn't strictly limited to the exact Backstage version (e.g. `1.39.0` for a `1.39.1` target backstage version). It performs a best-effort search to find the closest compatible version (newest plugin version available that is less than or equal to the target Backstage version), which could still be `1.38.0` for a `1.39.1` target backstage version.
 
 However, best-effort backstage version matches involve some risk. When a pull request is created with a plugin version that isn't a perfect match for the target Backstage version, a comment is automatically added to the PR. This comment details the potential risks and the requirement to deeply test the plugin with the target backstage version, providing precise case-by-case guidance.
 
