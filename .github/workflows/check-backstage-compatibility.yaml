@@ -132,17 +132,18 @@ jobs:
         with:
           name: compatibility-report
           path: ./
-
-      - name: Verify downloaded artifact
+          
+      - name: Verify compatibility report
         run: |
-          echo "Files in current directory:"
-          ls -la
-          echo "Looking for compatibility report files:"
-          find . -name "*compatibility*" -o -name "*.md" | head -10
           if [ -f "compatibility-report.md" ]; then
-            echo "Found compatibility-report.md"
+            echo "Successfully downloaded compatibility-report.md"
           else
-            echo "compatibility-report.md not found"
+            echo "❌ compatibility-report.md not found, creating fallback report"
+            echo "# Backstage Compatibility Report" > compatibility-report.md
+            echo "" >> compatibility-report.md
+            echo "⚠️ **Report generation failed** - This is a fallback report." >> compatibility-report.md
+            echo "" >> compatibility-report.md
+            echo "Please check the workflow logs for more details." >> compatibility-report.md
           fi
 
       - name: Update wiki page
