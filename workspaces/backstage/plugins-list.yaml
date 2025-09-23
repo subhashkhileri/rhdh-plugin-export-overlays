@@ -36,9 +36,10 @@ plugins/devtools-backend:
 plugins/events-backend-module-aws-sqs:
 plugins/events-backend-module-azure:
 plugins/events-backend-module-bitbucket-cloud:
+plugins/events-backend-module-bitbucket-server:
 plugins/events-backend-module-gerrit:
-#plugins/events-backend-module-github: # ==> the new backend system is not exported as default export (Error: Backend plugin is not valid for dynamic loading: it should either export a BackendFeature or BackendFeatureFactory as default export, or export a const dynamicPluginInstaller: BackendDynamicPluginInstaller field as dynamic loading entrypoint)
-#plugins/events-backend-module-gitlab: # ==> the new backend system is not exported as default export (Error: Backend plugin is not valid for dynamic loading: it should either export a BackendFeature or BackendFeatureFactory as default export, or export a const dynamicPluginInstaller: BackendDynamicPluginInstaller field as dynamic loading entrypoint)
+plugins/events-backend-module-github: 
+plugins/events-backend-module-gitlab:
 plugins/example-todo-list:
 plugins/example-todo-list-backend:
 plugins/home:
