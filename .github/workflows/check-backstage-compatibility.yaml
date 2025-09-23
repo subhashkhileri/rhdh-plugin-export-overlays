@@ -130,15 +130,15 @@ jobs:
       - name: Download compatibility report
         uses: actions/download-artifact@v4
         with:
-          name: compatibility-report
+          name: backstage-compatibility-report
           path: ./
           
       - name: Verify compatibility report
         run: |
-          if [ -f "compatibility-report.md" ]; then
-            echo "Successfully downloaded compatibility-report.md"
+          if [ -f "backstage-compatibility-report.md" ]; then
+            echo "Successfully downloaded backstage-compatibility-report.md"
           else
-            echo "compatibility-report.md not found, failing workflow"
+            echo "backstage-compatibility-report.md not found, failing workflow"
             exit 1
           fi
 
@@ -151,7 +151,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           # Copy the generated markdown to wiki
-          cp ../compatibility-report.md "Backstage-Compatibility-Report.md"
+          cp ../backstage-compatibility-report.md "Backstage-Compatibility-Report.md"
           
           # Check if there are changes
           if ! git diff --quiet; then
