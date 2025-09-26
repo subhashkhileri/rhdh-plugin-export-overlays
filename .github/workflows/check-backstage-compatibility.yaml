@@ -24,12 +24,6 @@ on:
         required: false
         default: false
 
-      test-wiki-update:
-        description: Allow wiki update when testing on non-main branches.
-        type: boolean
-        required: false
-        default: false
-
   push:
     branches:
       - 'main'
@@ -46,16 +40,8 @@ jobs:
       
       - name: Create the required-plugins file@
         continue-on-error: true
-        env:
-          TEST_WIKI_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test-wiki-update }}
         run: |
-          if [[ "${TEST_WIKI_MODE}" == "true" ]]
-          then
-            echo "Test wiki mode enabled: generating empty required-plugins file"
-            : > required-plugins
-          else
-            cat downstream-plugins > required-plugins
-          fi
+          cat downstream-plugins > required-plugins
 
       - name: Upload required-plugins file
         uses: actions/upload-artifact@v4
@@ -72,13 +58,13 @@ jobs:
       overlay-branch: ${{ inputs.overlay-branch }}
       workspace-path: ${{ inputs.workspace-path }}
       debug: ${{ inputs.debug || false }}
-      fail-for-required-only: ${{ inputs.fail-for-required-only || (github.event_name == 'workflow_dispatch' && inputs.test-wiki-update) }}
+      fail-for-required-only: ${{ inputs.fail-for-required-only || false }}
 
   update-badge:
     needs:
       - check
     runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.test-wiki-update != true)
+    if: always() && github.ref == 'refs/heads/main'
     steps:      
       - name: Checkout metadata branch
         uses: actions/checkout@v4
@@ -129,7 +115,7 @@ jobs:
     needs:
       - check
     runs-on: ubuntu-latest
-    if: always() && (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.test-wiki-update))
+    if: always() && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -175,15 +161,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Normalize any pre-existing compatibility report filenames
-          existing_report=$(git ls-files | grep -E '^Backstage' || true)
-          if [[ -n "${existing_report}" && "${existing_report}" != "Backstage-Compatibility-Report.md" ]]; then
-            echo "Renaming existing wiki report '${existing_report}' to 'Backstage-Compatibility-Report.md'"
-            git mv "${existing_report}" "Backstage-Compatibility-Report.md"
-          elif [[ -f Backstage-Compatibility-Report.md.md ]]; then
-            echo "Renaming local file Backstage-Compatibility-Report.md.md"
-            mv Backstage-Compatibility-Report.md.md Backstage-Compatibility-Report.md
-          fi
-
           # Copy the generated markdown to wiki
           cp ../backstage-compatibility-report.md "Backstage-Compatibility-Report.md"
 
