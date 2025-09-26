@@ -24,6 +24,12 @@ on:
         required: false
         default: false
 
+      test-wiki-update:
+        description: Allow wiki update when testing on non-main branches.
+        type: boolean
+        required: false
+        default: false
+
   push:
     branches:
       - 'main'
@@ -40,8 +46,16 @@ jobs:
       
       - name: Create the required-plugins file@
         continue-on-error: true
+        env:
+          TEST_WIKI_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test-wiki-update }}
         run: |
-          cat downstream-plugins > required-plugins
+          if [[ "${TEST_WIKI_MODE}" == "true" ]]
+          then
+            echo "Test wiki mode enabled: generating empty required-plugins file"
+            : > required-plugins
+          else
+            cat downstream-plugins > required-plugins
+          fi
 
       - name: Upload required-plugins file
         uses: actions/upload-artifact@v4
@@ -58,13 +72,13 @@ jobs:
       overlay-branch: ${{ inputs.overlay-branch }}
       workspace-path: ${{ inputs.workspace-path }}
       debug: ${{ inputs.debug || false }}
-      fail-for-required-only: ${{ inputs.fail-for-required-only || false }}
+      fail-for-required-only: ${{ inputs.fail-for-required-only || (github.event_name == 'workflow_dispatch' && inputs.test-wiki-update) }}
 
   update-badge:
     needs:
       - check
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.test-wiki-update != true)
     steps:      
       - name: Checkout metadata branch
         uses: actions/checkout@v4
@@ -115,7 +129,7 @@ jobs:
     needs:
       - check
     runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main'
+    if: always() && (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.test-wiki-update))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
