@@ -1,0 +1,115 @@
+name: Test Wiki Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: Test mode - use existing report or generate new one
+        required: false
+        default: 'existing'
+        type: choice
+        options:
+        - existing
+        - generate
+
+jobs:
+  test-wiki-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Checkout wiki
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup test report
+        run: |
+          if [[ "${{ inputs.test_mode }}" == "generate" ]]; then
+            # Generate a test report
+            cat > backstage-compatibility-report.md << 'EOF'
+          ## Test Backstage Compatibility Report
+
+          This is a test report generated at $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          ### Test Results
+          - ✅ Compatible workspaces: 5
+          - ⚠️ Incompatible optional: 2
+          - ❌ Incompatible required: 0
+
+          ### Test Workspaces
+          | Folder | Backstage version | Mandatory | Info |
+          |--------|-------------------|-----------|-------|
+          | workspaces/test1 | 1.42.5 | :red_circle: | Test info |
+          | workspaces/test2 | 1.42.4 | :white_circle: | Test info |
+
+          ### How to fix
+          This is a test report for workflow testing purposes.
+          EOF
+          else
+            # Use existing report if available, otherwise create minimal one
+            if [ ! -f "backstage-compatibility-report.md" ]; then
+              echo "## Test Report" > backstage-compatibility-report.md
+              echo "Test report created at $(date)" >> backstage-compatibility-report.md
+            fi
+          fi
+
+      - name: Test wiki update logic
+        run: |
+          set -euo pipefail
+
+          cd wiki
+
+          # Get default branch (same logic as the fixed workflow)
+          default_branch=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+          if [[ -z "${default_branch}" ]]; then
+            echo "Unable to determine wiki default branch"
+            exit 1
+          fi
+
+          echo "Wiki default branch: ${default_branch}"
+
+          git checkout "${default_branch}"
+
+          # Configure git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Copy the test report
+          cp ../backstage-compatibility-report.md "Backstage-Compatibility-Report.md"
+
+          # Check if there are changes
+          if ! git diff --quiet; then
+            echo "Changes detected, would commit and push"
+
+            # Add the file
+            git add "Backstage-Compatibility-Report.md"
+
+            # Calculate counts for commit message (mock values for testing)
+            required_count=0
+            unrequired_count=2
+            total_count=$((required_count + unrequired_count))
+
+            git commit -m "TEST: Update Backstage Compatibility Report
+
+- Total incompatible: ${total_count}
+- Required: ${required_count}
+- Optional: ${unrequired_count}
+
+Generated from test workflow at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+
+            echo "DRY RUN: Would push to origin/${default_branch}"
+            echo "Command: git push origin \"${default_branch}\""
+            echo "Commit created successfully (but not pushed in test mode)"
+          else
+            echo "No changes detected, wiki page is up to date"
+          fi
+        env:
+          INPUT_INCOMPATIBLE_REQUIRED_WORKSPACES: "workspaces/test1"
+          INPUT_INCOMPATIBLE_UNREQUIRED_WORKSPACES: "workspaces/test2 workspaces/test3"
+
+    permissions:
+      contents: write
