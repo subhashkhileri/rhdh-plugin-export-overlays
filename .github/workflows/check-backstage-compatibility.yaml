@@ -174,13 +174,23 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Normalize any pre-existing compatibility report filenames
+          existing_report=$(git ls-files | grep -E '^Backstage' || true)
+          if [[ -n "${existing_report}" && "${existing_report}" != "Backstage-Compatibility-Report.md" ]]; then
+            echo "Renaming existing wiki report '${existing_report}' to 'Backstage-Compatibility-Report.md'"
+            git mv "${existing_report}" "Backstage-Compatibility-Report.md"
+          elif [[ -f Backstage-Compatibility-Report.md.md ]]; then
+            echo "Renaming local file Backstage-Compatibility-Report.md.md"
+            mv Backstage-Compatibility-Report.md.md Backstage-Compatibility-Report.md
+          fi
+
           # Copy the generated markdown to wiki
           cp ../backstage-compatibility-report.md "Backstage-Compatibility-Report.md"
 
-          # Check if there are changes
-          if ! git diff --quiet; then
-            # Add the file
-            git add "Backstage-Compatibility-Report.md"
+          # Stage the report and check for changes
+          git add "Backstage-Compatibility-Report.md"
+
+          if ! git diff --cached --quiet; then
 
             # Calculate counts for commit message
             required_count=$(echo "${INPUT_INCOMPATIBLE_REQUIRED_WORKSPACES}" | wc -w)
@@ -197,6 +207,7 @@ jobs:
             git push origin "${default_branch}"
             echo "Wiki page updated successfully"
           else
+            git restore --staged "Backstage-Compatibility-Report.md"
             echo "No changes detected, wiki page is up to date"
           fi
         env:
