@@ -95,11 +95,11 @@ jobs:
 
             git commit -m "TEST: Update Backstage Compatibility Report
 
-- Total incompatible: ${total_count}
-- Required: ${required_count}
-- Optional: ${unrequired_count}
+            - Total incompatible: ${total_count}
+            - Required: ${required_count}
+            - Optional: ${unrequired_count}
 
-Generated from test workflow at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+            Generated from test workflow at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
 
             echo "DRY RUN: Would push to origin/${default_branch}"
             echo "Command: git push origin \"${default_branch}\""
