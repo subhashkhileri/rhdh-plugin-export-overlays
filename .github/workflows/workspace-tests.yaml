@@ -16,6 +16,8 @@ jobs:
       workspace: ${{ steps.meta.outputs.workspace }}
       overlayBranch: ${{ steps.meta.outputs.overlayBranch }}
       overlayRepo: ${{ steps.meta.outputs.overlayRepo }}
+      overlayCommit: ${{ steps.meta.outputs.overlayCommit }}
+      prNumber: ${{ steps.meta.outputs.pr }}
     steps:
       - name: Download published-exports artifact
         uses: dawidd6/action-download-artifact@v6
@@ -31,13 +33,25 @@ jobs:
       - name: Read meta
         id: meta
         run: |
+          echo "Contents of meta.json:"
+          cat meta.json || echo "meta.json not found"
           workspace=$(jq -r .workspace meta.json)
           overlayBranch=$(jq -r .overlayBranch meta.json)
           overlayRepo=$(jq -r .overlayRepo meta.json)
+          overlayCommit=$(jq -r .overlayCommit meta.json)
+          pr=$(jq -r '.pr // "null"' meta.json)
+          echo "Parsed values: workspace=$workspace, overlayBranch=$overlayBranch, overlayRepo=$overlayRepo, overlayCommit=$overlayCommit, pr=$pr"
           test -z "$workspace" && { echo "Missing workspace in meta.json"; exit 1; }
           echo "workspace=$workspace" >> $GITHUB_OUTPUT
           echo "overlayBranch=$overlayBranch" >> $GITHUB_OUTPUT
           echo "overlayRepo=$overlayRepo" >> $GITHUB_OUTPUT
+          echo "overlayCommit=$overlayCommit" >> $GITHUB_OUTPUT
+          echo "pr=$pr" >> $GITHUB_OUTPUT
+
+      - name: Debug resolved metadata
+        run: |
+          echo "Workspace: ${{ steps.meta.outputs.workspace }}"
+          echo "PR: ${{ steps.meta.outputs.pr }}, Overlay SHA: ${{ steps.meta.outputs.overlayCommit }}"
 
   prepare-test-config:
     needs: resolve
@@ -54,3 +68,62 @@ jobs:
     with:
       workspace-path: ${{ needs.resolve.outputs.workspace }}
 
+  add-test-result-comment:
+    needs:
+      - resolve
+      - integration-tests
+    concurrency:
+      group: addTestResultComment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      statuses: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post test result comment and status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const success = '${{ needs.integration-tests.outputs.success }}' === 'true';
+            const failed = `\n${{ toJSON(needs.integration-tests.outputs.failed-plugins) }}`.trim();
+            const pr = Number('${{ needs.resolve.outputs.prNumber }}');
+            const overlayCommit = '${{ needs.resolve.outputs.overlayCommit }}';
+            
+            if (!pr) {
+              console.log('No PR associated; skipping');
+              return;
+            }
+            
+            // Get current PR head SHA
+            const { data: prData } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr,
+            });
+            
+            // Use PR head if different from overlayCommit (re-test), else use overlayCommit (immediate publish)
+            const sha = prData.head.sha !== overlayCommit ? prData.head.sha : overlayCommit;
+            console.log(`Status SHA: ${sha} (PR head: ${prData.head.sha}, overlay: ${overlayCommit})`);
+            
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              description: 'Workspace Tests',
+              state: success ? 'success' : 'failure',
+              target_url: runUrl,
+              context: 'test',
+            });
+            
+            const body = success
+              ? `Integration tests passed. All plugins loaded successfully.\n\n[View run](${runUrl})`
+              : `Integration tests failed. Plugins not loaded:${failed ? `\n${failed}` : ''}\n\n[View run](${runUrl})`;
+            await github.rest.issues.createComment({
+              issue_number: pr,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });

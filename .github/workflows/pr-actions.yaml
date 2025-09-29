@@ -203,11 +203,12 @@ jobs:
           WORKSPACE: ${{ needs.prepare.outputs.workspace }}
           OVERLAY_BRANCH: ${{ needs.prepare.outputs.overlay-branch }}
           OVERLAY_REPO: ${{ needs.prepare.outputs.overlay-repo }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr-number }}
         run: |
           mkdir -p published-exports
           printf "%s\n" "$PUBLISHED_EXPORTS" > published-exports/published-exports.txt
           cat > published-exports/meta.json <<EOF
-          {"workspace":"${WORKSPACE}","overlayBranch":"${OVERLAY_BRANCH}","overlayRepo":"${OVERLAY_REPO}"}
+          {"workspace":"${WORKSPACE}","overlayBranch":"${OVERLAY_BRANCH}","overlayRepo":"${OVERLAY_REPO}","overlayCommit":"${{ needs.prepare.outputs.overlay-commit }}","pr":${PR_NUMBER}}
           EOF
       - name: Upload published-exports artifact
         uses: actions/upload-artifact@v4
