@@ -115,10 +115,37 @@ To add this additional configuration (excluding the patches, since the patch fil
 - Inside `plugins/`, create one folder per plugin you wish to enhance with additional information
 
 ### 3. Test the OCI image against an RHDH instance
+
+Plugin testing can be performed automatically via CI workflows or manually in your own RHDH environment.
+
+#### Automatic Testing
+
+The repository includes an automated integration testing workflow that verifies plugins load correctly in RHDH.
+
+**Prerequisites:**
+- PR must touch exactly one workspace
+- Each plugin must have its own metadata file in `workspaces/<modified_workspace>/metadata/`
+
+**Triggering tests:**
+- After `/publish`: Tests run automatically upon successful publish completion
+- Manual testing: Use `/test` comment on the PR to rerun the tests using the latest published artifacts
+  - For `/test` command, a previous successful `/publish` run is required
+
+**Testing workflow steps:**
+1. **Resolve metadata**: Retrieves published OCI references and PR metadata from the `published-exports` artifact
+2. **Prepare test config**: Generates `dynamic-plugins.test.yaml` from plugin metadata and copies other configuration files (`tests/app-config.yaml` and workspace-specific `app-config.test.yaml`, `test.env`)
+3. **Run integration tests**: Starts RHDH container with layered configuration, installs dynamic plugins from OCI artifacts, and verifies each plugin loads successfully
+4. **Report results**: Posts test status as a commit status check and PR comment with pass/fail results and links to the workflow run
+
+- **Results** are reported via PR comment and in the status check. The complete container logs are also available, in the `integration-tests/run` step.
+
+#### Manual Testing
+
 - To trigger a build of the OCI image for the plugins in a PR, comment: `/publish`.
-- This runs a GitHub workflow to build and publish **test OCI artifacts**. A bot will comment with the generated OCI image references, tagged as `<pr_number>_<plugin_version>`, and may also include a list of plugins for which the generation failed.
+- This runs a GitHub workflow to build and publish **test OCI artifacts**. A bot will comment with the generated OCI image references, tagged as `pr_<pr_number>__<plugin_version>`, and may also include a list of plugins for which the generation failed.
+- Use these OCI references to manually test the plugins in your own RHDH instance.
 - If you cannot test the generated images immediately, a good practice is to label the PR with `help wanted to test`.
 
 #### Once Testing Is Complete:
-- If the plugin works with your RHDH instance, **change the label** to `tested`
+- If the plugin works with RHDH (either via automatic or manual testing), **change the label** to `tested`
 - Once the PR is merged, the final OCI artifact will be published with the tag: `bs_<backstage_version>__<plugin_version>`
