@@ -63,17 +63,50 @@ jobs:
       workspace-path: ${{ needs.resolve.outputs.workspace }}
 
   integration-tests:
-    needs: prepare-test-config
+    needs:
+      - resolve
+      - prepare-test-config
+    if: ${{ needs.prepare-test-config.outputs.plugins_metadata_complete == 'true' }}
     uses: ./.github/workflows/run-plugin-integration-tests.yaml
     with:
       workspace-path: ${{ needs.resolve.outputs.workspace }}
 
-  add-test-result-comment:
+  add-skipped-test-comment:
+    if: ${{ needs.prepare-test-config.outputs.plugins_metadata_complete == 'false' && needs.resolve.outputs.prNumber != 'null' }}
     needs:
       - resolve
+      - prepare-test-config
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Post skipped-test comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = Number('${{ needs.resolve.outputs.prNumber }}');
+            if (!pr) {
+              console.log('No PR associated; skipping');
+              return;
+            }
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `:warning: \n[Integration test workflow](${runUrl}) skipped because some plugin metadata files (\`<workspace>/metadata/*.yaml\`) were not found.\n\nAdd the corresponding metadata files to enable testing for this workspace.\n`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              body,
+            });
+
+  add-test-result-comment:
+    if: ${{ needs.prepare-test-config.outputs.plugins_metadata_complete == 'true' }}
+    needs:
+      - resolve
+      - prepare-test-config
       - integration-tests
     concurrency:
-      group: addTestResultComment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      group: addTestResultComment-${{ github.ref_name }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -119,8 +152,8 @@ jobs:
             });
             
             const body = success
-              ? `Integration tests passed. All plugins loaded successfully.\n\n[View run](${runUrl})`
-              : `Integration tests failed. Plugins not loaded:${failed ? `\n${failed}` : ''}\n\n[View run](${runUrl})`;
+              ? `:white_check_mark: [Integration test workflow](${runUrl}) passed. All plugins loaded successfully.\n`
+              : `:x: \n[Integration test workflow](${runUrl}) failed. These plugins failed to load:${failed ? `\n${failed}` : ''}\n`;
             await github.rest.issues.createComment({
               issue_number: pr,
               owner: context.repo.owner,

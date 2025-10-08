@@ -12,16 +12,17 @@ on:
       workspace-path:
         required: true
         type: string
+    outputs:
+      plugins_metadata_complete:
+        description: "True if metadata exists for all referenced plugins"
+        value: ${{ jobs.prepareTestConfig.outputs.plugins_metadata_complete }}
 
 jobs:
   prepareTestConfig:
     runs-on: ubuntu-latest
+    outputs:
+      plugins_metadata_complete: ${{ steps.build-dynamic-plugins.outputs.plugins_metadata_complete }}
     steps:
-      - name: Print input values for debugging
-        run: |
-          echo "overlay-branch: ${{ inputs.overlay-branch }}"
-          echo "overlay-repo: ${{ inputs.overlay-repo }}"
-          echo "workspace-path: ${{ inputs.workspace-path }}"
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,9 +46,13 @@ jobs:
         uses: mikefarah/yq@v4
 
       - name: Build dynamic-plugins.test.yaml
+        id: build-dynamic-plugins
         run: |
           WORKSPACE_PATH="${{ inputs.workspace-path }}"
           PUBLISHED_EXPORTS=""
+          PLUGINS_FOUND=0
+          TOTAL_PLUGINS=0
+          PLUGINS_METADATA_COMPLETE="false"
 
           # Fallback: read from downloaded artifact if input was empty
           if [ -f "published-exports.txt" ]; then
@@ -57,8 +62,14 @@ jobs:
 
           if [ -z "$PUBLISHED_EXPORTS" ]; then
             echo "No published exports provided or found via artifact. Nothing to do."
+            echo "plugins_metadata_complete=$PLUGINS_METADATA_COMPLETE" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          # Count total plugins from exports
+          for export in $PUBLISHED_EXPORTS; do
+            TOTAL_PLUGINS=$((TOTAL_PLUGINS + 1))
+          done
 
           OUT_DIR="$WORKSPACE_PATH/tests"
           OUT_FILE="$OUT_DIR/dynamic-plugins.test.yaml"
@@ -77,26 +88,14 @@ jobs:
 
           # Always include the root-level default config
           ROOT_CONFIG="$GITHUB_WORKSPACE/tests/app-config.yaml"
-          if [ -f "$ROOT_CONFIG" ]; then
-            echo "Copying root app-config.yaml into artifact"
-            cp "$ROOT_CONFIG" "$OUT_DIR/app-config.yaml"
-          else
-            echo "Root-level tests/app-config.yaml not found at $ROOT_CONFIG"
-          fi
-
-          # copy optional workspace-level test configs into artefact
-          [ -f "$WORKSPACE_PATH/tests/app-config.test.yaml" ] && cp "$WORKSPACE_PATH/tests/app-config.test.yaml" "$OUT_DIR/"
-          [ -f "$WORKSPACE_PATH/tests/test.env" ] && cp "$WORKSPACE_PATH/tests/test.env" "$OUT_DIR/"
-
-          echo "Contents of $OUT_DIR after copy:" && ls -la "$OUT_DIR"
+          [ -f "$ROOT_CONFIG" ] && cp "$ROOT_CONFIG" "$OUT_DIR/app-config.yaml"
 
           # Start the resulting YAML file
-          echo "plugins:" > "$OUT_FILE"          
+          echo "plugins:" > "$OUT_FILE"
 
           # For each published export, extract plugin name and read its metadata
           # Expected export format: ghcr.io/<repo_path>/<plugin_name>:<tag>
           for export in $PUBLISHED_EXPORTS; do
-            echo "Processing export: $export"
             if [[ "$export" =~ ^ghcr\.io/(.+):([^[:space:]]+)$ ]]; then
               IMAGE_PATH_AND_PLUGIN="${BASH_REMATCH[1]}"   # <repo_path>/<plugin_name>
               NEW_TAG="${BASH_REMATCH[2]}"                 # <tag>
@@ -113,9 +112,9 @@ jobs:
                 continue
               fi
 
-              # Extract dynamicPlugins block under configs.default
-              if ! yq -e '.configs.default.dynamicPlugins' "$METADATA_FILE" >/dev/null 2>&1; then
-                echo "configs.default.dynamicPlugins not found in $METADATA_FILE, skipping"
+              # Extract plugin config block under configs.default
+              if ! yq -e '.configs.default' "$METADATA_FILE" >/dev/null 2>&1; then
+                echo "configs.default not found in $METADATA_FILE, skipping"
                 continue
               fi
 
@@ -123,13 +122,23 @@ jobs:
               echo "- package: \"oci://ghcr.io/${IMAGE_PATH_AND_PLUGIN}:${NEW_TAG}!${STRIPPED}\"" >> "$OUT_FILE"
               echo "  disabled: false" >> "$OUT_FILE"
               echo "  pluginConfig:" >> "$OUT_FILE"
-              echo "    dynamicPlugins:" >> "$OUT_FILE"
-              # Append the dynamicPlugins block indented by 6 spaces under pluginConfig.dynamicPlugins
-              yq -o=yaml '.configs.default.dynamicPlugins' "$METADATA_FILE" | sed 's/^/      /' >> "$OUT_FILE"
+              # Append the configs.default block indented by 4 spaces under pluginConfig
+              yq -o=yaml '.configs.default' "$METADATA_FILE" | sed 's/^/    /' >> "$OUT_FILE"
+              PLUGINS_FOUND=$((PLUGINS_FOUND + 1))
             else
               echo "Export did not match expected format, skipping: $export"
             fi
           done
+
+          if [ "$PLUGINS_FOUND" -eq 0 ]; then
+            echo "[]" >> "$OUT_FILE"
+          fi
+
+          if [ "$PLUGINS_FOUND" -eq "$TOTAL_PLUGINS" ] && [ "$TOTAL_PLUGINS" -gt 0 ]; then
+            PLUGINS_METADATA_COMPLETE="true"
+          fi
+
+          echo "plugins_metadata_complete=$PLUGINS_METADATA_COMPLETE" >> "$GITHUB_OUTPUT"
 
       - name: Upload integration-test artefact
         uses: actions/upload-artifact@v4

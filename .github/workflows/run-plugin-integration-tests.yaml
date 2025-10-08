@@ -57,12 +57,12 @@ jobs:
           ENV_ARGS=$( [ -f ./artifacts/test.env ] && echo "--env-file ./artifacts/test.env" || echo "" )
           DOCKER_CMD="docker run -d --name rhdh -p 7007:7007 $ENV_ARGS"
           if [ -f "./artifacts/app-config.yaml" ]; then
-            DOCKER_CMD="$DOCKER_CMD -v $(pwd)/artifacts/app-config.yaml:/opt/app-root/src/app-config.yaml"
+            DOCKER_CMD="$DOCKER_CMD -v "$(pwd)"/artifacts/app-config.yaml:/opt/app-root/src/app-config.yaml"
           fi
           if [ -f "./artifacts/app-config.test.yaml" ]; then
-            DOCKER_CMD="$DOCKER_CMD -v $(pwd)/artifacts/app-config.test.yaml:/opt/app-root/src/app-config.test.yaml"
+            DOCKER_CMD="$DOCKER_CMD -v "$(pwd)"/artifacts/app-config.test.yaml:/opt/app-root/src/app-config.test.yaml"
           fi
-          DOCKER_CMD="$DOCKER_CMD -v $(pwd)/artifacts/dynamic-plugins.test.yaml:/opt/app-root/src/dynamic-plugins.yaml"
+          DOCKER_CMD="$DOCKER_CMD -v "$(pwd)"/artifacts/dynamic-plugins.test.yaml:/opt/app-root/src/dynamic-plugins.yaml"
           
           # Add Docker config and environment variables
           echo "Using docker auth file: $HOME/.docker/config.json"
