@@ -37,6 +37,9 @@ dynamicPlugins:
   # A dummy frontend config is sufficient for our backend-only test.
   frontend: {}
 
+# Add minimal analytics key to satisfy app bundle schema validation.
+analytics: {}
+
 # Disable the permission plugin for simplified testing.
 permission:
   enabled: false
