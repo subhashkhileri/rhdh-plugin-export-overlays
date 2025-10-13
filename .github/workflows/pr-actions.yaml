@@ -236,6 +236,65 @@ jobs:
       overlay-repo: ${{ needs.prepare.outputs.overlay-repo }}
       workspace-path: ${{ needs.prepare.outputs.workspace }}
 
+  add_compatibility_failure_comment:
+    needs:
+      - parse
+      - prepare
+      - checkBackstageCompatibility
+
+    concurrency:
+      group: add_compatibility_failure_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+
+    permissions:
+      pull-requests: write
+
+    if: failure() && needs.parse.outputs.command_name == 'publish' && needs.prepare.outputs.overlay-branch != '' && needs.prepare.outputs.workspace != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download compatibility report
+        uses: actions/download-artifact@v4
+        with:
+          name: backstage-compatibility-report
+          path: ./
+
+      - name: Verify compatibility report
+        run: |
+          if [ -f "backstage-compatibility-report.md" ]; then
+            echo "Successfully downloaded backstage-compatibility-report.md"
+          else
+            echo "backstage-compatibility-report.md not found, skipping comment"
+            exit 0
+          fi
+
+      - name: Add compatibility failure comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'backstage-compatibility-report.md';
+
+            if (!fs.existsSync(reportPath)) {
+              console.log('Compatibility report not found, skipping comment');
+              return;
+            }
+
+            const reportContent = fs.readFileSync(reportPath, 'utf8');
+
+            const body = '## Backstage Compatibility Check Failed\n\n' +
+              'The workspace in this PR has compatibility issues with the target Backstage version. Here\'s the detailed compatibility report:\n\n' +
+              '---\n\n' +
+              reportContent + '\n\n' +
+              '---\n\n' +
+              'To resolve these issues, please check the [compatibility documentation](https://github.com/redhat-developer/rhdh/blob/main/docs/compatibility.md) or update your plugin dependencies.';
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
   add_publish_completion_comment:
     needs:
       - parse
@@ -243,6 +302,7 @@ jobs:
       - checkPRUpToDate
       - export
       - checkBackstageCompatibility
+      - add_compatibility_failure_comment
 
     concurrency:
       group: add_publish_completion_comment-${{ github.ref_name }}-${{ github.event.issue.number }}
