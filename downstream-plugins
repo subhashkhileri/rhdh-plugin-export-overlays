@@ -62,9 +62,9 @@ gitlab/packages/gitlab
 gitlab/packages/gitlab-backend
 
 # @pagerduty/backstage-plugin
-pagerduty-frontend/.
+pagerduty/plugins/backstage-plugin
 # @pagerduty/backstage-plugin-backend
-pagerduty-backend/.
+pagerduty/plugins/backstage-plugin-backend
 
 # @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
 scaffolder-backend-module-azure-repositories/.
