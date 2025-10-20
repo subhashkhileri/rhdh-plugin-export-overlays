@@ -22,8 +22,8 @@ jobs:
       prNumber: ${{ steps.meta.outputs.pr }}
       publishedExports: ${{ steps.meta.outputs.publishedExports }}
     steps:
-      - name: Download context artifact
-        id: download_context
+      # the artifact of the current run contains PR number
+      - name: Download context artifact 
         uses: dawidd6/action-download-artifact@v6
         with:
           name: context-${{ env.TRIGGERING_RUN_ID }}
@@ -31,15 +31,9 @@ jobs:
           path: ./context
           if_no_artifact_found: fail
 
-      - name: Get PR number from context artifact
-        id: find_artifact
-        run: |
-          pr_number=$(jq -r .pr ./context/meta.json)
-          echo "PR_NUMBER=$pr_number" >> $GITHUB_ENV
-
-      # The 'pr:' filter is intentionally omitted as it is unreliable for comment-triggered
-      # workflows on forks. We verify the PR manually in the next step.
-      - name: Download latest published artifact
+      # note: the 'pr:' filter is intentionally omitted as it is unreliable for comment-triggered
+      # workflows on forks. PR is verified manually in the next step.
+      - name: Download latest published-exports artifact
         uses: dawidd6/action-download-artifact@v6
         with:
           name: published-exports
@@ -50,24 +44,18 @@ jobs:
           allow_forks: true
           if_no_artifact_found: fail
 
-      - name: Handle missing artifact for /test command
-        if: ${{ failure() && steps.download_published_search.outcome == 'failure' }}
+      - name: Verify published-exports artifact belongs to triggering PR
         run: |
-          echo "::error::Could not find a 'published-exports' artifact for this PR."
-          echo "::error::Please run a successful '/publish' command on this PR before using '/test'."
-          exit 1
-
-      - name: Verify artifact belongs to current PR
-        run: |
-          expected_pr=$(jq -r .pr ./context/meta.json)
-          actual_pr=$(jq -r .pr meta.json)
-          echo "Expected PR: $expected_pr  -  Artifact PR: $actual_pr"
-          if [ "$expected_pr" != "$actual_pr" ]; then
-            echo "::error::Downloaded artifact does not belong to this PR."
+          triggering_pr=$(jq -r .pr ./context/meta.json)
+          artifact_pr=$(jq -r .pr ./meta.json)
+          if [[ "$triggering_pr" != "$artifact_pr" ]]; then
+            echo "::error::Mismatch: published-exports artifact does not belong to triggering PR"
+            echo "Triggering PR: $triggering_pr"
+            echo "Published-exports artifact PR: $artifact_pr"
             exit 1
           fi
 
-      - name: Read artifact metadata
+      - name: Read published-exports artifact metadata
         id: meta
         run: |
           echo "Contents of meta.json:"
@@ -97,12 +85,114 @@ jobs:
   prepare-test-config:
     needs: resolve
     if: ${{ needs.resolve.outputs.workspace != '' }}
-    uses: ./.github/workflows/prepare-test-config.yaml
-    with:
-      overlay-branch: ${{ needs.resolve.outputs.overlayBranch }}
-      overlay-repo: ${{ needs.resolve.outputs.overlayRepo }}
-      workspace-path: ${{ needs.resolve.outputs.workspace }}
-      published-exports: ${{ needs.resolve.outputs.publishedExports }}
+    runs-on: ubuntu-latest
+    outputs:
+      plugins_metadata_complete: ${{ steps.build-dynamic-plugins.outputs.plugins_metadata_complete }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.overlayBranch }}
+          repository: ${{ needs.resolve.outputs.overlayRepo }}
+
+      - name: Setup yq
+        uses: mikefarah/yq@v4
+
+      - name: Build dynamic-plugins.test.yaml
+        id: build-dynamic-plugins
+        run: |
+          WORKSPACE_PATH="${{ needs.resolve.outputs.workspace }}"
+          PUBLISHED_EXPORTS="${{ needs.resolve.outputs.publishedExports }}"
+          PLUGINS_FOUND=0
+          TOTAL_PLUGINS=0
+          PLUGINS_METADATA_COMPLETE="false"
+
+          if [ -z "$PUBLISHED_EXPORTS" ]; then
+            echo "No published exports provided."
+            echo "plugins_metadata_complete=$PLUGINS_METADATA_COMPLETE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Count total plugins from exports
+          for export in $PUBLISHED_EXPORTS; do
+            TOTAL_PLUGINS=$((TOTAL_PLUGINS + 1))
+          done
+
+          OUT_DIR="$WORKSPACE_PATH/tests"
+          OUT_FILE="$OUT_DIR/dynamic-plugins.test.yaml"
+          mkdir -p "$OUT_DIR"
+
+          # Build map of <stripped packageName> -> metadata file path
+          declare -A META_MAP
+          for file in "$WORKSPACE_PATH"/metadata/*.yaml; do
+            [ -e "$file" ] || continue
+            pkg=$(yq -r '.packageName // ""' "$file")
+            if [ -n "$pkg" ]; then
+              stripped=$(echo "$pkg" | sed 's|^@||; s|/|-|')
+              META_MAP["$stripped"]="$file"
+            fi
+          done
+
+          # Always include the root-level default config
+          ROOT_CONFIG="$GITHUB_WORKSPACE/tests/app-config.yaml"
+          [ -f "$ROOT_CONFIG" ] && cp "$ROOT_CONFIG" "$OUT_DIR/app-config.yaml"
+
+          # Start the resulting YAML file
+          echo "plugins:" > "$OUT_FILE"
+
+          # For each published export, extract plugin name and read its metadata
+          # Expected export format: ghcr.io/<repo_path>/<plugin_name>:<tag>
+          for export in $PUBLISHED_EXPORTS; do
+            if [[ "$export" =~ ^ghcr\.io/(.+):([^[:space:]]+)$ ]]; then
+              IMAGE_PATH_AND_PLUGIN="${BASH_REMATCH[1]}"   # <repo_path>/<plugin_name>
+              NEW_TAG="${BASH_REMATCH[2]}"                 # <tag>
+              PLUGIN_NAME="${IMAGE_PATH_AND_PLUGIN##*/}"
+              METADATA_FILE="${META_MAP[$PLUGIN_NAME]}"
+              if [ -z "$METADATA_FILE" ]; then
+                echo "Metadata mapping not found for $PLUGIN_NAME, skipping"
+                continue
+              fi
+
+              PACKAGE_NAME=$(yq -r '.packageName' "$METADATA_FILE")
+              if [ -z "$PACKAGE_NAME" ] || [ "$PACKAGE_NAME" = "null" ]; then
+                echo "packageName not found in $METADATA_FILE, skipping"
+                continue
+              fi
+
+              # Extract plugin config block under configs.default
+              if ! yq -e '.configs.default' "$METADATA_FILE" >/dev/null 2>&1; then
+                echo "configs.default not found in $METADATA_FILE, skipping"
+                continue
+              fi
+
+              STRIPPED=$(echo "$PACKAGE_NAME" | sed 's|^@||; s|/|-|')
+              echo "- package: \"oci://ghcr.io/${IMAGE_PATH_AND_PLUGIN}:${NEW_TAG}!${STRIPPED}\"" >> "$OUT_FILE"
+              echo "  disabled: false" >> "$OUT_FILE"
+              echo "  pluginConfig:" >> "$OUT_FILE"
+              # Append the configs.default block indented by 4 spaces under pluginConfig
+              yq -o=yaml '.configs.default' "$METADATA_FILE" | sed 's/^/    /' >> "$OUT_FILE"
+              PLUGINS_FOUND=$((PLUGINS_FOUND + 1))
+            else
+              echo "Export did not match expected format, skipping: $export"
+            fi
+          done
+
+          if [ "$PLUGINS_FOUND" -eq 0 ]; then
+            echo "[]" >> "$OUT_FILE"
+          fi
+
+          if [ "$PLUGINS_FOUND" -eq "$TOTAL_PLUGINS" ] && [ "$TOTAL_PLUGINS" -gt 0 ]; then
+            PLUGINS_METADATA_COMPLETE="true"
+          fi
+
+          echo "plugins_metadata_complete=$PLUGINS_METADATA_COMPLETE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload integration-test artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-artifacts
+          path: ${{ format('{0}/tests', needs.resolve.outputs.workspace) }}
+          if-no-files-found: error
 
   integration-tests:
     needs:
