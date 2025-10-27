@@ -1,0 +1,54 @@
+# RHDH Supported (TP or GA) plugin list
+# NOTE: include one line per plugin following the format: <workspace-folder>/plugins/<plugin-folder>
+
+# TODO: convert these to plugin paths once they're included in the overlay repo at
+# https://github.com/redhat-developer/rhdh-plugin-export-overlays/tree/release-1.y/workspaces
+
+analytics/plugins/analytics-provider-segment
+
+backstage/plugins/catalog-backend-module-github
+backstage/plugins/catalog-backend-module-github-org
+backstage/plugins/catalog-backend-module-ldap
+backstage/plugins/kubernetes-backend
+backstage/plugins/notifications
+backstage/plugins/notifications-backend
+backstage/plugins/notifications-backend-module-email
+backstage/plugins/scaffolder-backend-module-github
+backstage/plugins/signals-backend
+backstage/plugins/techdocs
+backstage/plugins/techdocs-backend
+backstage/plugins/techdocs-module-addons-contrib
+
+keycloak/plugins/catalog-backend-module-keycloak
+homepage/plugins/dynamic-home-page
+bulk-import/plugins/bulk-import
+bulk-import/plugins/bulk-import-backend
+marketplace/plugins/catalog-backend-module-marketplace
+marketplace/plugins/marketplace
+marketplace/plugins/marketplace-backend
+global-floating-action-button/plugins/global-floating-action-button
+global-header/plugins/global-header
+quickstart/plugins/quickstart
+adoption-insights/plugins/adoption-insights
+adoption-insights/plugins/adoption-insights-backend
+adoption-insights/plugins/analytics-module-adoption-insights
+
+# @roadiehq/backstage-plugin-argo-cd-backend
+roadie-backstage-plugins/plugins/backend/backstage-plugin-argo-cd-backend
+
+# deprecated as of 1.8
+ocm/plugins/ocm-backend
+ocm/plugins/ocm
+
+# quay-actions = plugin-scaffolder-backend-module-quay
+quay/plugins/quay-actions
+# frontend only
+quay/plugins/quay
+
+rbac/plugins/rbac
+
+scaffolder-backend-module-kubernetes/plugins/kubernetes-actions
+scaffolder-backend-module-regex/plugins/regex-actions
+scaffolder-backend-module-servicenow/plugins/scaffolder-backend-module-servicenow
+tekton/plugins/tekton
+topology/plugins/topology
