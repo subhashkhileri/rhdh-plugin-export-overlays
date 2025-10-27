@@ -3,7 +3,6 @@
 # NOTE: include one line per plugin following the format: <workspace-folder>/plugins/<plugin-folder>
 
 3scale/plugins/3scale-backend
-acr/plugins/acr
 azure-devops/plugins/azure-devops-backend
 azure-devops/plugins/azure-devops
 
@@ -18,10 +17,7 @@ backstage/plugins/scaffolder-backend-module-bitbucket-cloud
 backstage/plugins/scaffolder-backend-module-bitbucket-server
 backstage/plugins/scaffolder-backend-module-gerrit
 backstage/plugins/scaffolder-backend-module-gitlab
-backstage/plugins/signals
 
-scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
-pingidentity/plugins/catalog-backend-module-pingidentity
 dynatrace/plugins/dynatrace
 github-actions/plugins/github-actions
 github-issues/plugins/github-issues
@@ -30,13 +26,23 @@ github-issues/plugins/github-issues
 gitlab/packages/gitlab
 gitlab/packages/gitlab-backend
 
-# @pagerduty/backstage-plugin
+jenkins/plugins/jenkins
+jenkins/plugins/jenkins-backend
+
+lighthouse/plugins/lighthouse
+
 pagerduty/plugins/backstage-plugin
-# @pagerduty/backstage-plugin-backend
 pagerduty/plugins/backstage-plugin-backend
+
+pingidentity/plugins/catalog-backend-module-pingidentity
 
 # @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
 scaffolder-backend-module-azure-repositories/.
+
+scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
+
+# frontend only
+redhat-argocd/plugins/argocd
 
 # @roadiehq/backstage-plugin-datadog
 roadie-backstage-plugins/plugins/frontend/backstage-plugin-datadog
@@ -62,24 +68,7 @@ roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-ht
 # @roadiehq/scaffolder-backend-module-utils
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
 
-# no wrapper exists yet
-# jenkins/plugins/scaffolder-backend-module-jenkins
-jenkins/plugins/jenkins
-jenkins/plugins/jenkins-backend
-
-jfrog-artifactory/plugins/jfrog-artifactory
-
-# no wrapper exists yet
-# lighthouse/plugins/lighthouse-backend
-lighthouse/plugins/lighthouse
-
-nexus-repository-manager/plugins/nexus-repository-manager
-
-# frontend only
-redhat-argocd/plugins/argocd
-
-scaffolder-backend-module-sonarqube/plugins/scaffolder-backend-module-sonarqube
 sonarqube/plugins/sonarqube
 sonarqube/plugins/sonarqube-backend
-tech-radar/plugins/tech-radar-backend
+
 tech-radar/plugins/tech-radar
