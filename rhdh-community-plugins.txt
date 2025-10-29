@@ -1,0 +1,74 @@
+# RHDH Community-Supported plugin list
+# do not include plugins for which we never had wrappers / bundled the plugins in RHDH
+# NOTE: include one line per plugin following the format: <workspace-folder>/plugins/<plugin-folder>
+
+3scale/plugins/3scale-backend
+azure-devops/plugins/azure-devops-backend
+azure-devops/plugins/azure-devops
+
+backstage/plugins/catalog-backend-module-bitbucket-cloud
+backstage/plugins/catalog-backend-module-bitbucket-server
+backstage/plugins/catalog-backend-module-gitlab
+backstage/plugins/catalog-backend-module-gitlab-org
+backstage/plugins/catalog-backend-module-msgraph
+backstage/plugins/kubernetes
+backstage/plugins/scaffolder-backend-module-azure
+backstage/plugins/scaffolder-backend-module-bitbucket-cloud
+backstage/plugins/scaffolder-backend-module-bitbucket-server
+backstage/plugins/scaffolder-backend-module-gerrit
+backstage/plugins/scaffolder-backend-module-gitlab
+
+dynatrace/plugins/dynatrace
+github-actions/plugins/github-actions
+github-issues/plugins/github-issues
+
+# @immobiliarelabs/backstage-plugin-gitlab*
+gitlab/packages/gitlab
+gitlab/packages/gitlab-backend
+
+jenkins/plugins/jenkins
+jenkins/plugins/jenkins-backend
+
+lighthouse/plugins/lighthouse
+
+pagerduty/plugins/backstage-plugin
+pagerduty/plugins/backstage-plugin-backend
+
+pingidentity/plugins/catalog-backend-module-pingidentity
+
+# @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
+scaffolder-backend-module-azure-repositories/.
+
+scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
+
+# frontend only
+redhat-argocd/plugins/argocd
+
+# @roadiehq/backstage-plugin-datadog
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-datadog
+
+# @roadiehq/backstage-plugin-github-insights
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
+
+# @roadiehq/backstage-plugin-github-pull-requests
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-pull-requests
+
+# @roadiehq/backstage-plugin-jira
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-jira
+
+# @roadiehq/backstage-plugin-security-insights
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-security-insights
+
+# @roadiehq/scaffolder-backend-argocd
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-argocd
+
+# @roadiehq/scaffolder-backend-module-http-request
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-http-request
+
+# @roadiehq/scaffolder-backend-module-utils
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
+
+sonarqube/plugins/sonarqube
+sonarqube/plugins/sonarqube-backend
+
+tech-radar/plugins/tech-radar
