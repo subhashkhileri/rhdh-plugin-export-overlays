@@ -41,31 +41,14 @@ scaffolder-backend-module-azure-repositories/.
 
 scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
 
-# frontend only
-redhat-argocd/plugins/argocd
-
-# @roadiehq/backstage-plugin-datadog
+# @roadiehq/*
 roadie-backstage-plugins/plugins/frontend/backstage-plugin-datadog
-
-# @roadiehq/backstage-plugin-github-insights
 roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
-
-# @roadiehq/backstage-plugin-github-pull-requests
 roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-pull-requests
-
-# @roadiehq/backstage-plugin-jira
 roadie-backstage-plugins/plugins/frontend/backstage-plugin-jira
-
-# @roadiehq/backstage-plugin-security-insights
 roadie-backstage-plugins/plugins/frontend/backstage-plugin-security-insights
-
-# @roadiehq/scaffolder-backend-argocd
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-argocd
-
-# @roadiehq/scaffolder-backend-module-http-request
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-http-request
-
-# @roadiehq/scaffolder-backend-module-utils
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
 
 sonarqube/plugins/sonarqube

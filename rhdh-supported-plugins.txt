@@ -54,6 +54,9 @@ quickstart/plugins/quickstart
 
 rbac/plugins/rbac
 
+# frontend only
+redhat-argocd/plugins/argocd
+
 roadie-backstage-plugins/plugins/backend/backstage-plugin-argo-cd-backend
 
 scaffolder-backend-module-kubernetes/plugins/kubernetes-actions
