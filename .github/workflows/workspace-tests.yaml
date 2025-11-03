@@ -4,6 +4,8 @@ on:
   workflow_run:
     workflows: [Pull Request Actions]
     types: [completed]
+    paths:
+      - 'workspaces/**'
 
 jobs:
   resolve:
