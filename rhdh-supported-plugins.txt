@@ -69,3 +69,13 @@ tech-radar/plugins/tech-radar-backend
 tekton/plugins/tekton
 
 topology/plugins/topology
+
+# already GA based on 11/07 meeting
+backstage/plugins/catalog-backend-module-msgraph
+
+# heading to GA in 1.9 based on 11/07 meeting
+backstage/plugins/catalog-backend-module-gitlab
+backstage/plugins/catalog-backend-module-gitlab-org
+
+# heading to GA in 1.10 based on 11/07 meeting
+backstage/plugins/scaffolder-backend-module-gitlab
