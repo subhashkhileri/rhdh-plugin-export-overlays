@@ -2,56 +2,55 @@
 # do not include plugins for which we never had wrappers / bundled the plugins in RHDH
 # NOTE: include one line per plugin following the format: <workspace-folder>/plugins/<plugin-folder>
 
+# confirmed Community @ 11/07 meeting
 3scale/plugins/3scale-backend
-azure-devops/plugins/azure-devops-backend
 azure-devops/plugins/azure-devops
-
+azure-devops/plugins/azure-devops-backend
 backstage/plugins/catalog-backend-module-bitbucket-cloud
 backstage/plugins/catalog-backend-module-bitbucket-server
-backstage/plugins/catalog-backend-module-gitlab
-backstage/plugins/catalog-backend-module-gitlab-org
-backstage/plugins/catalog-backend-module-msgraph
-backstage/plugins/kubernetes
-backstage/plugins/scaffolder-backend-module-azure
 backstage/plugins/scaffolder-backend-module-bitbucket-cloud
 backstage/plugins/scaffolder-backend-module-bitbucket-server
 backstage/plugins/scaffolder-backend-module-gerrit
-backstage/plugins/scaffolder-backend-module-gitlab
+lighthouse/plugins/lighthouse
+pagerduty/plugins/backstage-plugin
+pagerduty/plugins/backstage-plugin-backend
+scaffolder-backend-module-sonarqube/plugins/scaffolder-backend-module-sonarqube
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-datadog
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-jira
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-security-insights
 
-dynatrace/plugins/dynatrace
-github-actions/plugins/github-actions
-github-issues/plugins/github-issues
+# confirmed Community @ 11/07 meeting
+# @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
+scaffolder-backend-module-azure-repositories/.
 
+# confirmed Community @ 11/07 meeting
 # @immobiliarelabs/backstage-plugin-gitlab*
 gitlab/packages/gitlab
 gitlab/packages/gitlab-backend
 
+# confirmed Community @ 11/07 meeting; the commercial ones are NOT exported from this repo (only in catalog entities by 3rd party vendor!)
+dynatrace/plugins/dynatrace
+
+### -----------
+
+# confirmed Community @ 11/07 meeting for 1.10 (but not 1.9?)
 jenkins/plugins/jenkins
 jenkins/plugins/jenkins-backend
-
-lighthouse/plugins/lighthouse
-
-pagerduty/plugins/backstage-plugin
-pagerduty/plugins/backstage-plugin-backend
-
-pingidentity/plugins/catalog-backend-module-pingidentity
-
-# @parfuemerie-douglas/scaffolder-backend-module-azure-repositories
-scaffolder-backend-module-azure-repositories/.
-
-scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
-
-# @roadiehq/*
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-datadog
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-pull-requests
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-jira
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-security-insights
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-argocd
-roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-http-request
-roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
 
+# remain TP, no path to GA by 1.10?
 sonarqube/plugins/sonarqube
 sonarqube/plugins/sonarqube-backend
+github-actions/plugins/github-actions
+github-issues/plugins/github-issues
 
+# appear to be TP or heading to GA based on 11/07 meeting, to be confirmed
+backstage/plugins/kubernetes
+backstage/plugins/scaffolder-backend-module-azure
+pingidentity/plugins/catalog-backend-module-pingidentity
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-pull-requests
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-http-request
+roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
+scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
 tech-radar/plugins/tech-radar
