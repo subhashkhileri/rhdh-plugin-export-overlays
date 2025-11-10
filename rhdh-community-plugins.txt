@@ -31,26 +31,9 @@ gitlab/packages/gitlab-backend
 # confirmed Community @ 11/07 meeting; the commercial ones are NOT exported from this repo (only in catalog entities by 3rd party vendor!)
 dynatrace/plugins/dynatrace
 
-### -----------
+### -----------??? see https://docs.google.com/spreadsheets/d/1xWOPmMNl0sF2vtkg1oDFZshpcAH81FryHanhTqLLIY4/edit?gid=610086571#gid=610086571
 
 # confirmed Community @ 11/07 meeting for 1.10 (but not 1.9?)
 jenkins/plugins/jenkins
 jenkins/plugins/jenkins-backend
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-argocd
-
-# remain TP, no path to GA by 1.10?
-sonarqube/plugins/sonarqube
-sonarqube/plugins/sonarqube-backend
-github-actions/plugins/github-actions
-github-issues/plugins/github-issues
-
-# appear to be TP or heading to GA based on 11/07 meeting, to be confirmed
-backstage/plugins/kubernetes
-backstage/plugins/scaffolder-backend-module-azure
-pingidentity/plugins/catalog-backend-module-pingidentity
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-pull-requests
-roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-http-request
-roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
-scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
-tech-radar/plugins/tech-radar
