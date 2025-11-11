@@ -1,0 +1,30 @@
+{
+  "name": "rhdh-plugin-export-overlays",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report e2e/playwright-report",
+    "test:tech-radar": "playwright test e2e/plugins/tech-radar",
+    "playwright:install": "playwright install",
+    "playwright:codegen": "playwright codegen",
+    "test:plugin": "node e2e-test-utils/run-plugin-tests.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@kubernetes/client-node": "^1.4.0",
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.9.1",
+    "dotenv": "^17.2.3",
+    "typescript": "^5.9.3",
+    "zx": "^8.8.5"
+  },
+  "packageManager": "yarn@3.8.7"
+}
