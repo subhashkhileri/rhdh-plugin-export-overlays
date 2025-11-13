@@ -1,24 +1,24 @@
 apiVersion: extensions.backstage.io/v1alpha1
 kind: Package
 metadata:
-  name: backstage-community-plugin-acr
+  name: roadiehq-backstage-plugin-jira
   namespace: rhdh
-  title: "ACR"
+  title: "Jira"
   links:
     - url: https://red.ht/rhdh
       title: Homepage
     - url: https://issues.redhat.com/browse/RHIDP
       title: Bugs
     - title: Source Code
-      url: https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/backstage-community-plugin-acr
+      url: https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/roadiehq-backstage-plugin-jira
   annotations:
     backstage.io/source-location: url
-      https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/backstage-community-plugin-acr
+      https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/roadiehq-backstage-plugin-jira
   tags: []
 spec:
-  packageName: "@backstage-community/plugin-acr"
-  dynamicArtifact: ./dynamic-plugins/dist/backstage-community-plugin-acr
-  version: 1.17.0
+  packageName: "@roadiehq/backstage-plugin-jira"
+  dynamicArtifact: ./dynamic-plugins/dist/roadiehq-backstage-plugin-jira
+  version: 2.13.1
   backstage:
     role: frontend-plugin
     supportedVersions: 1.42.5
@@ -26,19 +26,19 @@ spec:
   support: tech-preview
   lifecycle: active
   partOf:
-    - azure-container-registry
+    - jira
   appConfigExamples:
     - title: Default configuration
       content:
         dynamicPlugins:
           frontend:
-            backstage-community.plugin-acr:
+            roadiehq.backstage-plugin-jira:
               mountPoints:
-                - mountPoint: entity.page.image-registry/cards
-                  importName: AcrImagesEntityContent
+                - mountPoint: entity.page.issues/cards
+                  importName: EntityJiraOverviewCard
                   config:
                     layout:
                       gridColumn: 1 / -1
                     if:
-                      anyOf:
-                        - isAcrAvailable
+                      allOf:
+                        - isJiraAvailable

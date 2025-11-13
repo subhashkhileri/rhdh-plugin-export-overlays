@@ -1,24 +1,24 @@
 apiVersion: extensions.backstage.io/v1alpha1
 kind: Package
 metadata:
-  name: backstage-community-plugin-acr
+  name: roadiehq-backstage-plugin-datadog
   namespace: rhdh
-  title: "ACR"
+  title: "Datadog"
   links:
     - url: https://red.ht/rhdh
       title: Homepage
     - url: https://issues.redhat.com/browse/RHIDP
       title: Bugs
     - title: Source Code
-      url: https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/backstage-community-plugin-acr
+      url: https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/roadiehq-backstage-plugin-datadog
   annotations:
     backstage.io/source-location: url
-      https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/backstage-community-plugin-acr
+      https://github.com/redhat-developer/rhdh/tree/main/dynamic-plugins/wrappers/roadiehq-backstage-plugin-datadog
   tags: []
 spec:
-  packageName: "@backstage-community/plugin-acr"
-  dynamicArtifact: ./dynamic-plugins/dist/backstage-community-plugin-acr
-  version: 1.17.0
+  packageName: "@roadiehq/backstage-plugin-datadog"
+  dynamicArtifact: ./dynamic-plugins/dist/roadiehq-backstage-plugin-datadog
+  version: 2.5.0
   backstage:
     role: frontend-plugin
     supportedVersions: 1.42.5
@@ -26,19 +26,19 @@ spec:
   support: tech-preview
   lifecycle: active
   partOf:
-    - azure-container-registry
+    - datadog
   appConfigExamples:
     - title: Default configuration
       content:
         dynamicPlugins:
           frontend:
-            backstage-community.plugin-acr:
+            roadiehq.backstage-plugin-datadog:
               mountPoints:
-                - mountPoint: entity.page.image-registry/cards
-                  importName: AcrImagesEntityContent
+                - mountPoint: entity.page.monitoring/cards
+                  importName: EntityDatadogContent
                   config:
                     layout:
                       gridColumn: 1 / -1
                     if:
-                      anyOf:
-                        - isAcrAvailable
+                      allOf:
+                        - isDatadogAvailable
