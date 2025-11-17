@@ -79,21 +79,29 @@ backstage/plugins/catalog-backend-module-gitlab-org
 # heading to GA in 1.10 based on 11/07 meeting
 backstage/plugins/scaffolder-backend-module-gitlab
 
-### -----------??? see https://docs.google.com/spreadsheets/d/1xWOPmMNl0sF2vtkg1oDFZshpcAH81FryHanhTqLLIY4/edit?gid=610086571#gid=610086571
-
-# remain TP, no path to GA by 1.10?
-sonarqube/plugins/sonarqube
-sonarqube/plugins/sonarqube-backend
-github-actions/plugins/github-actions
-github-issues/plugins/github-issues
-
-# appear to be TP or heading to GA based on 11/07 meeting, to be confirmed
+# heading to GA per 11/12 meeting
 backstage/plugins/kubernetes
-backstage/plugins/scaffolder-backend-module-azure
 pingidentity/plugins/catalog-backend-module-pingidentity
-roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
 roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-pull-requests
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-http-request
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-module-utils
 scaffolder-relation-processor/plugins/catalog-backend-module-scaffolder-relation-processor
+
+### -----------??? see https://docs.google.com/spreadsheets/d/1xWOPmMNl0sF2vtkg1oDFZshpcAH81FryHanhTqLLIY4/edit?gid=610086571#gid=610086571
+
+# remain TP despite no path to GA by 1.10; to be confirmed at 11/21 meeting
+sonarqube/plugins/sonarqube
+sonarqube/plugins/sonarqube-backend
+
+# likely heading to GA; to be confirmed at 11/21 meeting
+github-actions/plugins/github-actions
+github-issues/plugins/github-issues
+
+# other Azure stuff has moved to Community, why not zoidberg? to be confirmed at 11/21 meeting
+backstage/plugins/scaffolder-backend-module-azure
+
+# might go back to community or stay on path to GA because it's GH-related; to be confirmed at 11/21 meeting
+roadie-backstage-plugins/plugins/frontend/backstage-plugin-github-insights
+
+# might go back to community; to be confirmed at 11/21 meeting
 tech-radar/plugins/tech-radar

@@ -33,7 +33,9 @@ dynatrace/plugins/dynatrace
 
 ### -----------??? see https://docs.google.com/spreadsheets/d/1xWOPmMNl0sF2vtkg1oDFZshpcAH81FryHanhTqLLIY4/edit?gid=610086571#gid=610086571
 
-# confirmed Community @ 11/07 meeting for 1.10 (but not 1.9?)
+# confirmed Community @ 11/07 meeting for 1.10 (but not 1.9?); to be confirmed at 11/21 meeting
 jenkins/plugins/jenkins
 jenkins/plugins/jenkins-backend
+
+# might be GA because other ArgoCD plugins are GA; to be confirmed at 11/21 meeting
 roadie-backstage-plugins/plugins/scaffolder-actions/scaffolder-backend-argocd
