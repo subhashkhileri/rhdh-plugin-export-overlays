@@ -15,5 +15,5 @@ export default defineConfig(
         name: workspaceName,
       },
     ],
-  }),
+  })
 );
