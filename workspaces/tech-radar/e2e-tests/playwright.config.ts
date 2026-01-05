@@ -1,19 +1,15 @@
-import { defineConfig } from "@playwright/test";
-import { createPlaywrightConfig } from "rhdh-e2e-test-utils/playwright-config";
-import "dotenv/config";
+import { defineConfig } from "rhdh-e2e-test-utils/playwright-config";
+import dotenv from "dotenv";
 
-const workspaceName = import.meta.dirname.split("/").at(-2);
-
+dotenv.config({ path: `${import.meta.dirname}/.env` });
 /**
  * Tech Radar plugin e2e test configuration.
  * Extends the base config from rhdh-e2e-test-utils.
  */
-export default defineConfig(
-  createPlaywrightConfig({
-    projects: [
-      {
-        name: workspaceName,
-      },
-    ],
-  })
-);
+export default defineConfig({
+  projects: [
+    {
+      name: "tech-radar",
+    },
+  ],
+});

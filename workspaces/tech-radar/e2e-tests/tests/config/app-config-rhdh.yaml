@@ -6,12 +6,6 @@ app:
 backend:
   reading:
     allow:
-      - host: ${DH_TARGET_URL}
-auth:
-  environment: development
-  providers:
-    guest:
-      dangerouslyAllowOutsideDevelopment: true
-
+      - host: ${TECH_RADAR_DATA_URL}
 techRadar:
-  url: "http://${DH_TARGET_URL}/tech-radar"
+  url: "http://${TECH_RADAR_DATA_URL}/tech-radar"
