@@ -689,6 +689,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: read
 
   add_update_commit_completion_comment:
     needs:
