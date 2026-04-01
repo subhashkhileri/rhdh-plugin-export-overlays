@@ -33,7 +33,9 @@ test.describe("Test Topology plugin", () => {
 
     await rhdh.configure({ auth: "keycloak" });
 
-    const rbacConfigmapPath = WorkspacePaths.resolve("tests/config/rbac-configmap.yaml");
+    const rbacConfigmapPath = WorkspacePaths.resolve(
+      "tests/config/rbac-configmap.yaml",
+    );
 
     await $`oc apply -f ${rbacConfigmapPath} -n ${project}`;
     await deployResources(project);
