@@ -101,8 +101,9 @@ echo "[INFO] Node $(node --version) | Yarn $(yarn --version)"
 
 if command -v oc &>/dev/null && oc whoami &>/dev/null 2>&1; then
     echo "[INFO] Cluster: $(oc whoami --show-server) ($(oc whoami))"
-else
-    echo "[WARN] Not logged into a cluster. Tests requiring cluster access will fail."
+elif [[ "${PLAYWRIGHT_ARGS[0]:-}" != "--list" ]]; then
+    echo "[ERROR] Not logged into a cluster. Login with 'oc login' first."
+    exit 1
 fi
 
 # ── Discover workspaces ───────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ RESOLUTIONS="\"@playwright/test\": \"${PLAYWRIGHT_VERSION}\""
 if [[ -n "$E2E_TEST_UTILS_PATH" ]]; then
     echo "[INFO] Using local e2e-test-utils: $E2E_TEST_UTILS_PATH"
     echo "[INFO] Building local e2e-test-utils..."
-    (cd "$E2E_TEST_UTILS_PATH" && yarn install --immutable 2>&1 | tail -1 && yarn build 2>&1 | tail -1)
+    (cd "$E2E_TEST_UTILS_PATH" && yarn install --immutable && yarn build)
     RESOLUTIONS+=", \"@red-hat-developer-hub/e2e-test-utils\": \"file:${E2E_TEST_UTILS_PATH}\""
 elif [[ -n "$E2E_TEST_UTILS_VERSION" ]]; then
     echo "[INFO] Pinning e2e-test-utils to version: $E2E_TEST_UTILS_VERSION"
@@ -175,11 +176,7 @@ for ws in "${E2E_WORKSPACES[@]}"; do
 done
 
 echo "[INFO] Installing dependencies (@playwright/test pinned to $PLAYWRIGHT_VERSION)..."
-YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install 2>&1 | tail -3
-
-# ── Install browser ───────────────────────────────────────────────────────────
-
-npx playwright install chromium 2>&1 | tail -1
+YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
 
 # ── Generate root playwright.config.ts ────────────────────────────────────────
 # Extracts project definitions directly from workspace configs via sed instead of
@@ -247,6 +244,10 @@ if [[ "${PLAYWRIGHT_ARGS[0]:-}" == "--list" ]]; then
         "${PLAYWRIGHT_ARGS[@]:1}" 2>&1 || true
     exit 0
 fi
+
+# ── Install browser ───────────────────────────────────────────────────────────
+
+npx playwright install chromium
 
 # ── Run tests ─────────────────────────────────────────────────────────────────
 
