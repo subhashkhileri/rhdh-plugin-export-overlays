@@ -318,6 +318,7 @@ jobs:
       overlay-branch: ${{ needs.prepare.outputs.overlay-branch }}
       overlay-repo: ${{ needs.prepare.outputs.overlay-repo }}
       workspace-path: ${{ needs.prepare.outputs.workspace }}
+      artifact-name-suffix: -pr-${{ needs.prepare.outputs.pr-number }}
 
   add-completion-comment:
     needs:
@@ -339,7 +340,7 @@ jobs:
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: backstage-compatibility-report
+          name: backstage-compatibility-report-pr-${{ needs.prepare.outputs.pr-number }}
           path: ./
 
       - name: Add completion comment
