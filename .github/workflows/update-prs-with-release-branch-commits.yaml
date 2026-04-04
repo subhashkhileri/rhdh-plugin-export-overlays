@@ -100,7 +100,7 @@ jobs:
       fail-fast: false
       matrix:
         pr-number: ${{ fromJSON(needs.update-prs.outputs.updated-pr-numbers) }}
-      max-parallel: 2
+      max-parallel: 1
     uses: ./.github/workflows/auto-publish-pr.yaml
     with:
       pr-number: ${{ matrix.pr-number }}
