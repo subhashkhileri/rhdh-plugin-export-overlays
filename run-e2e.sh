@@ -79,11 +79,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Skip tag — auto-derived from JOB_NAME for --grep-invert (e.g., @skip-ocp-helm).
-# Uses negative lookahead (?!-) for exact matching: the pattern @skip-ocp-helm(?!-)
-# will match the tag @skip-ocp-helm but won't match @skip-ocp-helm-nightly,
-# keeping PR check and nightly tags isolated from each other.
-# Prepended to PLAYWRIGHT_ARGS so user-provided --grep-invert takes precedence (last wins).
+# Auto-skip tests tagged @skip-<job-suffix> based on JOB_NAME.
+# (?!-) ensures exact match — @skip-ocp-helm won't match @skip-ocp-helm-nightly.
 if [[ -n "$JOB_NAME" ]]; then
     JOB_SUFFIX=$(echo "$JOB_NAME" | sed -n 's/.*-e2e-//p')
     if [[ -n "$JOB_SUFFIX" ]]; then
