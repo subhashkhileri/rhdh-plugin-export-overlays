@@ -79,6 +79,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Skip tag — auto-derived from JOB_NAME for --grep-invert (e.g., @skip-ocp-helm).
+# Prepended to PLAYWRIGHT_ARGS so user-provided --grep-invert takes precedence (last wins).
+if [[ -n "$JOB_NAME" ]]; then
+    JOB_SUFFIX=$(echo "$JOB_NAME" | sed -n 's/.*-e2e-//p')
+    if [[ -n "$JOB_SUFFIX" ]]; then
+        E2E_SKIP_TAG="@skip-${JOB_SUFFIX}"
+        PLAYWRIGHT_ARGS=("--grep-invert" "$E2E_SKIP_TAG" "${PLAYWRIGHT_ARGS[@]}")
+        echo "[INFO] Skip tag: $E2E_SKIP_TAG (derived from JOB_NAME)"
+    fi
+fi
+
 GENERATED_FILES=()
 
 # ── Prerequisites ─────────────────────────────────────────────────────────────
