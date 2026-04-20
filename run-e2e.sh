@@ -80,8 +80,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Skip tag — auto-derived from JOB_NAME for --grep-invert (e.g., @skip-ocp-helm).
-# Uses negative lookahead (?!-) so @skip-ocp-helm only matches that exact tag,
-# not @skip-ocp-helm-nightly. This lets tests skip in PR check without skipping nightly.
+# Uses negative lookahead (?!-) for exact matching: the pattern @skip-ocp-helm(?!-)
+# will match the tag @skip-ocp-helm but won't match @skip-ocp-helm-nightly,
+# keeping PR check and nightly tags isolated from each other.
 # Prepended to PLAYWRIGHT_ARGS so user-provided --grep-invert takes precedence (last wins).
 if [[ -n "$JOB_NAME" ]]; then
     JOB_SUFFIX=$(echo "$JOB_NAME" | sed -n 's/.*-e2e-//p')
