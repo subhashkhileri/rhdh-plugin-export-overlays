@@ -80,11 +80,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Skip tag — auto-derived from JOB_NAME for --grep-invert (e.g., @skip-ocp-helm).
+# Uses negative lookahead (?!-) so @skip-ocp-helm only matches that exact tag,
+# not @skip-ocp-helm-nightly. This lets tests skip in PR check without skipping nightly.
 # Prepended to PLAYWRIGHT_ARGS so user-provided --grep-invert takes precedence (last wins).
 if [[ -n "$JOB_NAME" ]]; then
     JOB_SUFFIX=$(echo "$JOB_NAME" | sed -n 's/.*-e2e-//p')
     if [[ -n "$JOB_SUFFIX" ]]; then
-        E2E_SKIP_TAG="@skip-${JOB_SUFFIX}"
+        E2E_SKIP_TAG="@skip-${JOB_SUFFIX}(?!-)"
         PLAYWRIGHT_ARGS=("--grep-invert" "$E2E_SKIP_TAG" "${PLAYWRIGHT_ARGS[@]}")
         echo "[INFO] Skip tag: $E2E_SKIP_TAG (derived from JOB_NAME)"
     fi
