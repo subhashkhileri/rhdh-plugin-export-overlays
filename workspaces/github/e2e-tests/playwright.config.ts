@@ -8,6 +8,11 @@ export default defineConfig({
   projects: [
     {
       name: "github-actions",
+      testMatch: /tests\/specs\/github-actions\.spec\.ts/,
+    },
+    {
+      name: "github-issues",
+      testMatch: /tests\/specs\/github-issues\.spec\.ts/,
     },
   ],
 });

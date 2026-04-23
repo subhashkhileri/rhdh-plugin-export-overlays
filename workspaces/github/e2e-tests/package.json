@@ -1,5 +1,5 @@
 {
-  "name": "github-actions-e2e-tests",
+  "name": "github-e2e-tests",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "yarn": ">=3"
   },
   "packageManager": "yarn@4.12.0",
-  "description": "E2E tests for <your-plugin>",
+  "description": "E2E tests for the plugins in the github workspace",
   "scripts": {
     "test": "playwright test",
     "report": "playwright show-report",
