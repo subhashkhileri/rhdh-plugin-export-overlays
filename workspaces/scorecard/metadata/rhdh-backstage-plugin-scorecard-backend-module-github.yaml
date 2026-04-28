@@ -29,4 +29,13 @@ spec:
   lifecycle: active
   partOf:
     - scorecard
-  appConfigExamples: []
+  appConfigExamples:
+    - title: Optional GitHub open-PR scorecard schedule
+      content:
+        scorecard:
+          plugins:
+            github:
+              open_prs:
+                schedule:
+                  frequency: { hours: 4 }
+                  timeout: { minutes: 10 }
