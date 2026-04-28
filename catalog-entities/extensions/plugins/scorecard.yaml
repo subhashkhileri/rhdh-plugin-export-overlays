@@ -8,8 +8,8 @@ metadata:
   description: |
     Track the health, security, and compliance of your components with customizable KPIs.
   annotations:
-    extensions.backstage.io/pre-installed: 'true' # this means the plugin yaml is preinstalled, not the plugin itself, all other plugins are marked as 'custom'
-  tags: 
+    extensions.backstage.io/pre-installed: "true" # this means the plugin yaml is preinstalled, not the plugin itself, all other plugins are marked as 'custom'
+  tags:
     - analytics
 
   links:
@@ -23,7 +23,6 @@ metadata:
       url: https://github.com/redhat-developer/rhdh-plugins/tree/main/workspaces/scorecard
 
 spec:
-
   author: Red Hat
   support:
     provider: Red Hat
@@ -63,5 +62,6 @@ spec:
   packages:
     - rhdh-backstage-plugin-scorecard-backend-module-github
     - rhdh-backstage-plugin-scorecard-backend-module-jira
+    - rhdh-backstage-plugin-scorecard-backend-module-filecheck
     - rhdh-backstage-plugin-scorecard-backend
     - rhdh-backstage-plugin-scorecard
