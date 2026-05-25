@@ -29,6 +29,14 @@ test.describe.serial("Dynamic home page customization", () => {
   test.beforeAll(async ({ browser, rhdh }) => {
     test.setTimeout(10 * 60 * 1000);
 
+    // This plugin lives in ghcr.io (not RHEC); override {{inherit}} registry for nightly mode.
+    const ghcrRegistry = "ghcr.io/redhat-developer/rhdh-plugin-export-overlays";
+    process.env.NIGHTLY_DPDY_OCI_REGISTRY_MAP = JSON.stringify({
+      [ghcrRegistry]: [
+        "@red-hat-developer-hub/backstage-plugin-homepage-backend",
+      ],
+    });
+
     await test.runOnce("homepage-setup", async () => {
       await setupKeycloakGroups();
 

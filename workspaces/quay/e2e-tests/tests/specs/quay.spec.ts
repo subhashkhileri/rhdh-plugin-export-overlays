@@ -6,6 +6,15 @@ test.describe("Test Quay.io plugin", () => {
   const quayRepository = "rhdh-community/rhdh";
 
   test.beforeAll(async ({ rhdh }) => {
+    // These plugins live in ghcr.io (not RHEC); override {{inherit}} registry for nightly mode.
+    const ghcrRegistry = "ghcr.io/redhat-developer/rhdh-plugin-export-overlays";
+    process.env.NIGHTLY_DPDY_OCI_REGISTRY_MAP = JSON.stringify({
+      [ghcrRegistry]: [
+        "@backstage-community/plugin-quay",
+        "@backstage-community/plugin-quay-backend",
+        "@backstage-community/plugin-scaffolder-backend-module-quay",
+      ],
+    });
     await rhdh.configure({ auth: "guest" });
     await rhdh.deploy();
   });

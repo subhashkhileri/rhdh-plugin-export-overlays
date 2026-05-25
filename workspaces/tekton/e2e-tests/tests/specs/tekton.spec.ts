@@ -4,6 +4,11 @@ import { TektonSupportHelper } from "../support/tekton-support-helper";
 
 test.describe("Test Tekton plugin", () => {
   test.beforeAll(async ({ rhdh }) => {
+    // This plugin lives in ghcr.io (not RHEC); override {{inherit}} registry for nightly mode.
+    const ghcrRegistry = "ghcr.io/redhat-developer/rhdh-plugin-export-overlays";
+    process.env.NIGHTLY_DPDY_OCI_REGISTRY_MAP = JSON.stringify({
+      [ghcrRegistry]: ["@backstage-community/plugin-tekton"],
+    });
     await rhdh.configure({
       auth: "keycloak",
     });
