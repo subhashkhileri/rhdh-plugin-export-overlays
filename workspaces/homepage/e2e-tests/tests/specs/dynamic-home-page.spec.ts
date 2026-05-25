@@ -34,15 +34,6 @@ test.describe.serial("Dynamic home page customization", () => {
   test.beforeAll(async ({ browser, rhdh }) => {
     test.setTimeout(10 * 60 * 1000);
 
-    // Community plugin publishes to ghcr.io; nightly mode resolves {{inherit}} to RHEC by default.
-    // Remove when this community package is no longer in default.packages.yaml in the rhdh repo.
-    const ghcrRegistry = "ghcr.io/redhat-developer/rhdh-plugin-export-overlays";
-    process.env.NIGHTLY_DPDY_OCI_REGISTRY_MAP = JSON.stringify({
-      [ghcrRegistry]: [
-        "@red-hat-developer-hub/backstage-plugin-homepage-backend",
-      ],
-    });
-
     await test.runOnce("homepage-setup", async () => {
       await setupKeycloakGroups();
 
