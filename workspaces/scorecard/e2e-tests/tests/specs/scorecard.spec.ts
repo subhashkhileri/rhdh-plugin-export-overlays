@@ -16,6 +16,10 @@ import {
   type ScorecardHelpers,
 } from "../utils/scorecard";
 
+const isNightlyMode =
+  process.env.E2E_NIGHTLY_MODE === "true" ||
+  process.env.JOB_NAME?.includes("periodic-") === true;
+
 test.describe.serial("Scorecard Plugin Tests", () => {
   // Override the 90 s base timeout for all tests and hooks in this group.
   // beforeAll: deploy (~5 min) + filecheck poll (~5 min) + github poll (~2 min) = ~12 min max.
@@ -110,7 +114,7 @@ test.describe.serial("Scorecard Plugin Tests", () => {
 
   test("Aggregated scorecard (README file exists): drill-down and table UI", async () => {
     test.skip(
-      process.env.E2E_NIGHTLY_MODE === "true",
+      isNightlyMode,
       "fails in nightly runs https://redhat.atlassian.net/browse/RHDHBUGS-3191",
     );
     await aggregated.runAggregatedScorecardDrilldownScenario(
@@ -247,8 +251,7 @@ test.describe.serial("Scorecard Plugin Tests", () => {
     for (const { entity, key, expected } of filecheckCases) {
       test(`filecheck.${key} is '${expected}' for ${entity}`, async () => {
         test.skip(
-          process.env.E2E_NIGHTLY_MODE === "true" &&
-            entity.startsWith("filecheck"),
+          isNightlyMode && entity.startsWith("filecheck"),
           "fails in nightly runs https://redhat.atlassian.net/browse/RHDHBUGS-3191",
         );
         await scorecard.expectFilecheckForEntity(
