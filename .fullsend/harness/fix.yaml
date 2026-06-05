@@ -1,0 +1,30 @@
+agent: agents/fix.md
+model: opus
+image: ghcr.io/fullsend-ai/fullsend-code:latest
+policy: policies/fix.yaml
+
+skills:
+  - skills/e2e-failure-analysis
+
+post_script: scripts/post-fix.sh
+
+host_files:
+  - src: env/gcp-vertex.env
+    dest: /tmp/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: env/fix.env
+    dest: /tmp/workspace/.env.d/fix.env
+    expand: true
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/workspace/.gcp-credentials.json
+  - src: ${ANALYSIS_OUTPUT_DIR}/agent-result.json
+    dest: /tmp/workspace/agent-input/agent-result.json
+
+runner_env:
+  ANALYSIS_OUTPUT_DIR: ${ANALYSIS_OUTPUT_DIR}
+  GH_TOKEN: ${GH_TOKEN}
+  REPO_FULL_NAME: ${REPO_FULL_NAME}
+  FORK_FULL_NAME: ${FORK_FULL_NAME}
+  FIX_PR_BRANCH: ${FIX_PR_BRANCH}
+
+timeout_minutes: 25

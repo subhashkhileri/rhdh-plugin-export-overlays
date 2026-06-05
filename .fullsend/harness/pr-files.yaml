@@ -1,0 +1,22 @@
+agent: agents/pr-files.md
+model: opus
+image: ghcr.io/fullsend-ai/fullsend-code:latest
+policy: policies/pr-files.yaml
+
+host_files:
+  - src: env/gcp-vertex.env
+    dest: /tmp/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: env/pr-files.env
+    dest: /tmp/workspace/.env.d/pr-files.env
+    expand: true
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/workspace/.gcp-credentials.json
+
+runner_env:
+  GH_TOKEN: ${GH_TOKEN}
+  GITHUB_PR_URL: ${GITHUB_PR_URL}
+  PR_NUMBER: ${PR_NUMBER}
+  REPO_FULL_NAME: ${REPO_FULL_NAME}
+
+timeout_minutes: 5

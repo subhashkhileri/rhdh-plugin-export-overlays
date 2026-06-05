@@ -1,0 +1,15 @@
+{
+  "pr_number": 2437,
+  "repo": "redhat-developer/rhdh-plugin-export-overlays",
+  "title": "test: temp",
+  "total_files_changed": 1,
+  "files": [
+    {
+      "path": "run-e2e.sh",
+      "status": "MODIFIED",
+      "additions": 2,
+      "deletions": 1
+    }
+  ],
+  "summary": "A minimal test PR that modifies only the E2E test runner script (run-e2e.sh) at the repo root. The change is small — 2 lines added and 1 line removed — and affects the unified test runner used for cross-workspace E2E test execution. No plugin workspaces, catalog entities, or CI workflows are touched."
+}

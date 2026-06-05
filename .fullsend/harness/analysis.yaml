@@ -1,0 +1,22 @@
+agent: agents/analysis.md
+model: opus
+image: ghcr.io/fullsend-ai/fullsend-code:latest
+policy: policies/analysis.yaml
+
+skills:
+  - skills/e2e-failure-analysis
+
+host_files:
+  - src: env/gcp-vertex.env
+    dest: /tmp/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: env/analysis.env
+    dest: /tmp/workspace/.env.d/analysis.env
+    expand: true
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/workspace/.gcp-credentials.json
+
+runner_env:
+  E2E_FAILURE_URL: ${E2E_FAILURE_URL}
+
+timeout_minutes: 20

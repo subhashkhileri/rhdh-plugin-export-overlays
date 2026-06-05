@@ -1,0 +1,125 @@
+name: Update opened PRs from Release Branch
+description: Update opened PRs from their target a release branch with common, non workspace content. 
+on:
+  workflow_call:
+    inputs:
+      release-branch:
+        description: Release branch whose PRs should be updated with the given commit.
+        type: string
+        required: true
+      pr:
+        description: PR number of a single PR to update. By default update all PRs.
+        type: string
+        required: false
+      force:
+        description: Update the PRs even if it overwrites PR manual changes.
+        type: boolean
+        default: false
+        required: false
+  
+  workflow_dispatch:
+    inputs:
+      release-branch:
+        description: Release branch whose PRs should be updated with the given commit.
+        type: string
+        required: true
+      pr:
+        description: PR number of a single PR to update. By default update all PRs.
+        type: string
+        required: false
+      force:
+        description: Update the PRs even if it overwrites PR manual changes.
+        type: boolean
+        default: false
+        required: false
+  
+concurrency:
+  group: ${{ github.workflow_ref }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-prs:
+    runs-on: ubuntu-latest
+    name: Update PRs
+
+    outputs:
+      pr-comments: ${{ steps.update-prs.outputs.pr-comments }}
+      updated-pr-numbers: ${{ steps.update-prs.outputs.updated-pr-numbers }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        id: update-prs
+        env:
+          INPUT_RELEASE_BRANCH: ${{ inputs.release-branch }}
+          INPUT_PR: ${{ inputs.pr }}
+          INPUT_FORCE: ${{ inputs.force }}
+
+        with:
+          script: |
+            const script = require('./.github/workflows/github-script/update-prs-with-release-branch-commits.js');
+            await script({github, context, core});
+    permissions:
+      contents: write
+      pull-requests: write
+
+  comment-prs:
+    runs-on: ubuntu-latest
+    name: Comment PRs
+    needs:
+      - update-prs
+    if: needs.update-prs.outputs.pr-comments != ''
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          INPUT_PR_COMMENTS: ${{ needs.update-prs.outputs.pr-comments }}
+        with:
+          script: |
+            const prComments = JSON.parse(core.getInput('pr_comments'));
+            for (const pr of prComments) {
+              await github.rest.issues.createComment({
+                issue_number: pr.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: pr.comment,
+              });
+              await new Promise(r => setTimeout(r, 500));
+            }
+
+    permissions:
+      pull-requests: write
+
+  auto-publish-updated-prs:
+    name: Auto-publish updated PRs
+    needs: [update-prs, comment-prs]
+    if: |
+      !cancelled() &&
+      needs.update-prs.result == 'success' &&
+      needs.update-prs.outputs.updated-pr-numbers != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger PR Actions publish for each updated PR
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          INPUT_UPDATED_PR_NUMBERS: ${{ needs.update-prs.outputs.updated-pr-numbers }}
+          INPUT_RELEASE_BRANCH: ${{ inputs.release-branch }}
+        with:
+          script: |
+            const prNumbers = JSON.parse(core.getInput('updated_pr_numbers'));
+            const ref = core.getInput('release_branch');
+            for (const prNumber of prNumbers) {
+              core.info(`Triggering publish for PR #${prNumber}`);
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'pr-actions.yaml',
+                ref,
+                inputs: {
+                  'pr-number': String(prNumber),
+                  'command-name': 'publish',
+                },
+              });
+              await new Promise(r => setTimeout(r, 2000));
+            }
