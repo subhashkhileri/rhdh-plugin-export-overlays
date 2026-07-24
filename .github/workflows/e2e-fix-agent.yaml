@@ -136,13 +136,17 @@ jobs:
 
           ISSUE_URL=$(gh issue create --repo "${REPO}" \
             --title "[fullsend] E2E nightly failure: ${BRANCH} (${TODAY})" \
-            --label "e2e-fix-agent" \
             --body "Nightly E2E run failed on \`${BRANCH}\`.
 
           PROW_URL: ${PROW_URL}
 
           The e2e-fix agent will analyze this failure, classify the root cause, and either implement a fix or skip the failing test with a JIRA bug.")
           echo "Created issue: ${ISSUE_URL}"
+
+          # Add label separately so GitHub fires an issues:labeled event
+          # (gh issue create --label does NOT emit a separate labeled event)
+          ISSUE_NUMBER="${ISSUE_URL##*/}"
+          gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "e2e-fix-agent"
 
       - name: Dry run summary
         if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') == 'true'
