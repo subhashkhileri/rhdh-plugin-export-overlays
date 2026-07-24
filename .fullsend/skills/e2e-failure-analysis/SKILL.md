@@ -32,9 +32,9 @@ ARTIFACTS=$(node --experimental-strip-types "$SKILL_DIR/scripts/download-artifac
 ```
 
 The script parses both PR check and nightly (periodic) prow/gcsweb URLs, downloads
-artifacts via the public GCS JSON API (no gcloud dependency), caches them locally,
-and prints the `ARTIFACTS` path. Subsequent runs with the same URL skip the download
-(cache is validated for completeness, not just directory existence).
+artifacts via the public GCS JSON API (no gcloud dependency), and prints the
+`ARTIFACTS` path. Each run re-downloads artifacts fresh (any previous cache for the
+same URL is cleared first).
 
 ### Step 1: Diagnostic Summary
 
