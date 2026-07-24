@@ -62,12 +62,14 @@ This script gives you:
 **Classify each failure before proceeding:**
 - **UI failure** (Playwright assertions) → proceed to Step 2
 - **Setup/beforeAll failure** (CLI commands, deployment errors) → skip to **Step 5, build-log.txt**
+- **Deployment timeout** (pod 0/1 Ready, "Timeout waiting for pods") → skip to
+  **Step 5, cluster logs** — check `backstage-backend.log` for the actual cause
 
 Setup failures have no useful page snapshots, screenshots, or traces. **Go to
 build-log.txt first** — it captures the full stdout/stderr of every deployment script
-and CLI command, so it shows *why* the setup failed. Cluster logs only show the
-resulting state (what was or wasn't running). The cause is almost always in the build
-log, not the cluster logs.
+and CLI command, so it shows *why* the setup failed. For deployment timeouts, the
+backend log reveals the mechanism (DB refused, plugin crash, config error) — do not
+classify without it.
 
 ### Step 2: Read error-context.md for Failed Tests
 
@@ -251,7 +253,8 @@ what's running, then investigate relevant pod logs.
 **When to check early (alongside Steps 1-2):**
 - UI test timed out waiting for a plugin element → plugin install log
 - Page shows error/blank state → backstage-backend log
-- Pod never became ready → events.txt
+- Pod never became ready → events.txt + backstage-backend.log
+- Deployment timeout ("Timeout waiting for pods") → `backstage-backend.log` first
 
 #### Auxiliary pod logs
 
@@ -336,6 +339,12 @@ CI env ($VAULT_TOKEN=abc) → rhdh-secrets.yaml (TOKEN: $VAULT_TOKEN) → app-co
 ### Deployment Failure (CrashLoopBackOff)
 **Grep for**: `tail -50 events.txt` + `grep -i "error\|crash" backstage-backend.log | tail -20`
 **Causes**: Bad plugin config, missing env var, image pull failure
+
+### Pod Timeout (Running but not Ready)
+**Symptom**: "Timeout waiting for pods", pod `Running 0/1`, zero restarts
+**Check**: `backstage-backend.log` — grep for `error|ECONNREFUSED|crash|exception`
+**Causes**: DB connection race (`ECONNREFUSED` → `infra_flake`), plugin crash
+(`product_bug`), missing config (`test_fix`). Always check the backend log.
 
 ### Login Failure
 **Check**: error-context.md page snapshot — is it login page or error?

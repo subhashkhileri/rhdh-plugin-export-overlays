@@ -193,7 +193,10 @@ From the skill's output, extract:
       not just errors-only), `action <id>` for failed actions,
       `console --errors-only`, `requests --failed`
 - [ ] build-log.txt checked for setup/beforeAll failures (Step 5)
-- [ ] Cluster logs checked where relevant (Step 5)
+- [ ] **Cluster logs checked for every deployment failure (Step 5)** —
+      `pods.txt` + `events.txt` + `backstage-backend.log` for any
+      Init:Error, pod timeout, or CrashLoopBackOff. A one-line diagnostic
+      message is never sufficient to classify a deployment failure.
 
 The trace requirement applies to EVERY test failure that involves browser
 interaction. The only exceptions are setup failures (shell script exit,
@@ -223,9 +226,15 @@ workspace, assign a `fix_category`:
 **Decision guide:**
 - If the test assertion is wrong or outdated → `test_fix`
 - If the test config is missing/wrong (paths, secrets, plugins) → `test_fix`
+- If the test setup script has a bug (missing wait, race condition) → `test_fix`
 - If the plugin itself is broken (API changed, component missing) → `product_bug`
 - If pods crashed with OOM/ImagePull/network errors → `infra_flake`
 - If vault secrets or CI variables are missing → `environment`
+
+**`infra_flake` requires evidence of transience.** You must have checked
+`pods.txt`, `events.txt`, and `backstage-backend.log` and confirmed the
+cause would not reproduce on every run. "Timeout" alone is a symptom,
+not a classification — check the backend log for the mechanism.
 
 **Within a workspace with multiple failures:**
 - If failures share a root cause (e.g., beforeAll failed, serial tests
