@@ -110,23 +110,17 @@ jobs:
           set -euo pipefail
           TODAY=$(date -u '+%Y-%m-%d')
 
-          # Skip if an open issue already exists for today's failure
+          # Close any stale open issue for this branch so the agent always
+          # reads today's prow URL from the issue body (not a comment).
           EXISTING=$(gh issue list --repo "${REPO}" \
             --label "e2e-fix-agent" --state open \
             --search "[fullsend] E2E nightly failure: ${BRANCH}" \
             --json number,title --jq ".[].number" | head -1) || true
 
           if [[ -n "${EXISTING}" ]]; then
-            echo "Issue #${EXISTING} already open — adding comment with new prow URL"
-            gh issue comment "${EXISTING}" --repo "${REPO}" \
-              --body "New failure detected:
-          PROW_URL: ${PROW_URL}"
-            # Re-apply label to re-trigger the agent
-            gh issue edit "${EXISTING}" --repo "${REPO}" --remove-label "e2e-fix-agent" 2>/dev/null || true
-            sleep 5
-            gh issue edit "${EXISTING}" --repo "${REPO}" --add-label "e2e-fix-agent"
-            echo "Re-triggered agent on issue #${EXISTING}"
-            exit 0
+            gh issue close "${EXISTING}" --repo "${REPO}" \
+              --comment "Superseded by today's run — creating a fresh issue."
+            echo "Closed stale issue #${EXISTING}"
           fi
 
           # Create the label if it doesn't exist
