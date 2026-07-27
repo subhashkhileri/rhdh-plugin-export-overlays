@@ -63,13 +63,14 @@ This script gives you:
 - **UI failure** (Playwright assertions) → proceed to Step 2
 - **Setup/beforeAll failure** (CLI commands, deployment errors) → skip to **Step 5, build-log.txt**
 - **Deployment timeout** (pod 0/1 Ready, "Timeout waiting for pods") → skip to
-  **Step 5, cluster logs** — check `backstage-backend.log` for the actual cause
+  **Step 5, build-log.txt first**, then cluster logs if the pod started
 
 Setup failures have no useful page snapshots, screenshots, or traces. **Go to
 build-log.txt first** — it captures the full stdout/stderr of every deployment script
-and CLI command, so it shows *why* the setup failed. For deployment timeouts, the
-backend log reveals the mechanism (DB refused, plugin crash, config error) — do not
-classify without it.
+and CLI command, so it shows *why* the setup failed. For deployment timeouts, also
+check `backstage-backend.log` if the pod started — it reveals the internal mechanism
+(DB refused, plugin crash, config error). If the pod never started, the backend log
+won't exist — classify from build-log.txt and events.txt instead.
 
 ### Step 2: Read error-context.md for Failed Tests
 
@@ -253,8 +254,9 @@ what's running, then investigate relevant pod logs.
 **When to check early (alongside Steps 1-2):**
 - UI test timed out waiting for a plugin element → plugin install log
 - Page shows error/blank state → backstage-backend log
-- Pod never became ready → events.txt + backstage-backend.log
-- Deployment timeout ("Timeout waiting for pods") → `backstage-backend.log` first
+- Pod never became ready → events.txt + backstage-backend.log (if present)
+- Deployment timeout ("Timeout waiting for pods") → build-log.txt first,
+  then `backstage-backend.log` if the pod started (it may not exist)
 
 #### Auxiliary pod logs
 
@@ -342,9 +344,11 @@ CI env ($VAULT_TOKEN=abc) → rhdh-secrets.yaml (TOKEN: $VAULT_TOKEN) → app-co
 
 ### Pod Timeout (Running but not Ready)
 **Symptom**: "Timeout waiting for pods", pod `Running 0/1`, zero restarts
-**Check**: `backstage-backend.log` — grep for `error|ECONNREFUSED|crash|exception`
+**Check**: build-log.txt first, then `backstage-backend.log` (if present) —
+grep for `error|ECONNREFUSED|crash|exception`
 **Causes**: DB connection race (`ECONNREFUSED` → `infra_flake`), plugin crash
-(`product_bug`), missing config (`test_fix`). Always check the backend log.
+(`product_bug`), missing config (`test_fix`). If the pod never started, the
+backend log won't exist — classify from build-log.txt and events.txt.
 
 ### Login Failure
 **Check**: error-context.md page snapshot — is it login page or error?

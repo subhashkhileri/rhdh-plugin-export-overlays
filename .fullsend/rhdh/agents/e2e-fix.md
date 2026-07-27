@@ -194,9 +194,10 @@ From the skill's output, extract:
       `console --errors-only`, `requests --failed`
 - [ ] build-log.txt checked for setup/beforeAll failures (Step 5)
 - [ ] **Cluster logs checked for every deployment failure (Step 5)** —
-      `pods.txt` + `events.txt` + `backstage-backend.log` for any
-      Init:Error, pod timeout, or CrashLoopBackOff. A one-line diagnostic
-      message is never sufficient to classify a deployment failure.
+      `pods.txt` + `events.txt` + `backstage-backend.log` (if present) for
+      any Init:Error, pod timeout, or CrashLoopBackOff. If the pod never
+      started, the backend log won't exist — classify from build-log.txt,
+      events.txt, and pods.txt instead.
 
 The trace requirement applies to EVERY test failure that involves browser
 interaction. The only exceptions are setup failures (shell script exit,
@@ -231,10 +232,11 @@ workspace, assign a `fix_category`:
 - If pods crashed with OOM/ImagePull/network errors → `infra_flake`
 - If vault secrets or CI variables are missing → `environment`
 
-**`infra_flake` requires evidence of transience.** You must have checked
-`pods.txt`, `events.txt`, and `backstage-backend.log` and confirmed the
-cause would not reproduce on every run. "Timeout" alone is a symptom,
-not a classification — check the backend log for the mechanism.
+**`infra_flake` requires evidence of transience.** Check `pods.txt`,
+`events.txt`, and `backstage-backend.log` (if the pod started) to confirm
+the cause would not reproduce on every run. If the backend log doesn't
+exist (pod never started), use build-log.txt and events.txt. "Timeout"
+alone is a symptom, not a classification — look for the mechanism.
 
 **Within a workspace with multiple failures:**
 - If failures share a root cause (e.g., beforeAll failed, serial tests

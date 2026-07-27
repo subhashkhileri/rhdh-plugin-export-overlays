@@ -14,7 +14,7 @@ name: E2E Fix Agent
 
 on:
   schedule:
-    - cron: "0 13 * * *" # 13:00 UTC — after the main nightly (~11:15 UTC)
+    - cron: "15 6 * * *" # 06:15 UTC (11:45 IST) — after the main nightly
   workflow_dispatch:
     inputs:
       prow_url:
