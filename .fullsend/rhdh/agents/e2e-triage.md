@@ -122,33 +122,43 @@ All write operations are handled by the **post-script** running on the host.
 
 ---
 
-## Phase 1: Setup
+## Phase 1: Download Artifacts & Run Diagnostics
+
+Download artifacts once so subagents don't repeat the download:
 
 ```bash
-command -v curl >/dev/null && echo "curl: ok" || echo "curl: MISSING"
-command -v jq >/dev/null && echo "jq: ok" || echo "jq: MISSING"
+SKILL_DIR="${SKILL_DIR:-.claude/skills/e2e-failure-analysis}"
+ARTIFACTS=$(node --experimental-strip-types "$SKILL_DIR/scripts/download-artifacts.ts" "${PROW_URL}")
+BUILD_LOG="$(dirname "$ARTIFACTS")/build-log.txt"
+echo "ARTIFACTS=${ARTIFACTS}"
+echo "BUILD_LOG=${BUILD_LOG}"
+```
+
+Run diagnostics across all projects to identify failed tests per workspace:
+
+```bash
+node --experimental-strip-types "$SKILL_DIR/scripts/diagnostics.ts" "$ARTIFACTS"
 ```
 
 ---
 
 ## Phase 2: Analyze
 
-Use `/e2e-failure-analysis` with the prow/gcsweb URL to investigate ALL
-failures across all workspaces. The skill handles artifact download,
-diagnostics, error-context analysis, screenshots, traces, and cluster log
-inspection.
+Use `/e2e-failure-analysis` to investigate failures. Artifacts are already
+downloaded — subagents skip Step 0 and use the paths from Phase 1.
 
-**When failures span multiple workspaces**, run artifact download and
-diagnostics once, then spawn one subagent per workspace to run the skill's
-Steps 1–5 in parallel. Send all Agent calls in a single response so they
-run concurrently. Always pass `model: "opus"`.
+**When failures span multiple workspaces**, fan out one subagent per workspace
+to run the skill's Steps 1–5. Send all Agent calls in a single response so
+they run concurrently. Always pass `model: "opus"`.
 
 Each subagent prompt should include:
-- `SKILL_DIR` and `ARTIFACTS` paths, and the build-log path
-  (`$(dirname "$ARTIFACTS")/build-log.txt`)
-- The workspace name and its failed tests (names + error messages)
-- Instruction to read `$SKILL_DIR/SKILL.md` for methodology and invoke
-  `/playwright-trace` before trace analysis
+- `ARTIFACTS` and `BUILD_LOG` paths from Phase 1
+- The workspace name and its failed tests (names + error messages from
+  the Phase 1 diagnostics output)
+- Instruction to invoke `/e2e-failure-analysis` for methodology and
+  `/playwright-trace` before trace analysis. **If either skill fails to
+  invoke, the subagent must exit immediately with an error message stating
+  which skill could not be invoked — do not proceed without the skills.**
 - Instruction to skip Step 0 (artifacts already downloaded) and use
   `--project <workspace>` when running diagnostics
 - Instruction to return per-test findings: test name, root cause,

@@ -53,7 +53,7 @@ env:
     GITHUB_ISSUE_URL: "${GITHUB_ISSUE_URL}"
     REPO_FULL_NAME: redhat-developer/rhdh-plugin-export-overlays
 
-timeout_minutes: 30
+timeout_minutes: 60
 
 forge:
   github:
