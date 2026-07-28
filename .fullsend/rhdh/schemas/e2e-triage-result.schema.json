@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "e2e-fix-result.schema.json",
-  "title": "E2E Fix Agent Result",
-  "description": "Structured output from the e2e-fix agent — one entry per workspace with failures.",
+  "$id": "e2e-triage-result.schema.json",
+  "title": "E2E Triage Agent Result",
+  "description": "Structured output from the e2e-triage agent. Classifies nightly E2E failures per workspace and emits issue directives.",
   "type": "object",
   "additionalProperties": false,
   "required": ["target_branch", "workspaces"],
@@ -11,26 +11,36 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "description": "Branch the Prow job ran against (e.g., main, release-1.10). Fix branches are created from this base."
+      "description": "Branch the nightly ran against (e.g., main, release-1.10)."
     },
     "workspaces": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 20,
-      "items": { "$ref": "#/$defs/workspace_result" }
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/workspace_classification" }
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 4096,
+      "description": "Human-readable summary of all classifications."
     }
   },
   "$defs": {
-    "workspace_result": {
+    "workspace_classification": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["workspace", "tests", "root_cause", "fix_category", "action_taken", "attempt", "next_step", "branch"],
+      "required": ["workspace", "fix_category", "tests", "root_cause"],
       "properties": {
         "workspace": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
           "description": "Workspace name (e.g., argocd, orchestrator, backstage)."
+        },
+        "fix_category": {
+          "type": "string",
+          "enum": ["infra_flake", "test_fix", "product_bug", "environment"],
+          "description": "Dominant classification for failures in this workspace."
         },
         "tests": {
           "type": "array",
@@ -45,38 +55,14 @@
           "maxLength": 4096,
           "description": "Summary of the root cause covering all failures in this workspace."
         },
-        "fix_category": {
+        "root_cause_slug": {
           "type": "string",
-          "enum": ["infra_flake", "test_fix", "product_bug", "environment"],
-          "description": "Dominant classification for this workspace's failures."
+          "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+          "minLength": 2,
+          "maxLength": 64,
+          "description": "Slug identifying the root cause (e.g., oci-resolution, route-wait). Used for dedup and umbrella issue titles."
         },
-        "action_taken": {
-          "type": "string",
-          "enum": ["logged", "commented_on_existing", "issue_tracked", "fix_implemented", "test_skipped"],
-          "description": "What the agent did for this workspace."
-        },
-        "attempt": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10,
-          "description": "Which attempt this is for this workspace."
-        },
-        "next_step": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096,
-          "description": "What should happen next for this workspace."
-        },
-        "branch": {
-          "type": ["string", "null"],
-          "description": "Branch name (e.g., fullsend/argocd-route-wait), or null if no code changes."
-        },
-        "issue": {
-          "$ref": "#/$defs/issue_directive"
-        },
-        "jira": {
-          "$ref": "#/$defs/jira_directive"
-        }
+        "issue": { "$ref": "#/$defs/issue_directive" }
       }
     },
     "failed_test": {
@@ -121,7 +107,7 @@
           "type": "array",
           "items": { "type": "string" },
           "maxItems": 10,
-          "description": "Labels for new issue (create action)."
+          "description": "Labels for new issue."
         },
         "body": {
           "type": "string",
@@ -129,11 +115,9 @@
           "maxLength": 16384,
           "description": "Issue body or comment body."
         },
-        "add_labels": {
-          "type": "array",
-          "items": { "type": "string" },
-          "maxItems": 10,
-          "description": "Labels to add when commenting on existing issue."
+        "cycle_ready_to_code": {
+          "type": "boolean",
+          "description": "When true, post-script removes then re-adds ready-to-code to force a new labeled event (used when issue exists but PR was closed)."
         }
       },
       "allOf": [
@@ -152,41 +136,6 @@
           "then": { "required": ["number", "body"] }
         }
       ]
-    },
-    "jira_directive": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["project", "type", "summary", "description", "backfill_file"],
-      "properties": {
-        "project": {
-          "type": "string",
-          "pattern": "^[A-Z][A-Z0-9]*$",
-          "maxLength": 20,
-          "description": "JIRA project key (e.g., RHDHBUGS)."
-        },
-        "type": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Issue type (e.g., Bug)."
-        },
-        "summary": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256,
-          "description": "JIRA issue summary."
-        },
-        "description": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 16384,
-          "description": "JIRA issue description."
-        },
-        "backfill_file": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Path to spec file containing JIRA-PENDING placeholder."
-        }
-      }
     }
   }
 }
