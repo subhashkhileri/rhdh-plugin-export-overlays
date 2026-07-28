@@ -175,7 +175,26 @@ failures across all workspaces. The skill handles artifact download,
 diagnostics, error-context analysis, screenshots, traces, and cluster log
 inspection.
 
-From the skill's output, extract:
+**When failures span multiple workspaces**, run artifact download and
+diagnostics once, then spawn one subagent per workspace to run the skill's
+Steps 1–5 in parallel. Send all Agent calls in a single response so they
+run concurrently. Always pass `model: "opus"`.
+
+Each subagent prompt should include:
+- `SKILL_DIR` and `ARTIFACTS` paths, and the build-log path
+  (`$(dirname "$ARTIFACTS")/build-log.txt`)
+- The workspace name and its failed tests (names + error messages)
+- Instruction to read `$SKILL_DIR/SKILL.md` for methodology and invoke
+  `/playwright-trace` before trace analysis
+- Instruction to skip Step 0 (artifacts already downloaded) and use
+  `--project <workspace>` when running diagnostics
+- Instruction to return per-test findings: test name, root cause,
+  suggested `fix_category`, and key evidence
+
+If a subagent fails or returns unusable output, analyze that workspace
+inline as a fallback.
+
+From the skill's output (yours or subagents'), extract:
 - Which tests failed and their error messages
 - Which workspace each test belongs to
 - Root cause for each failure
