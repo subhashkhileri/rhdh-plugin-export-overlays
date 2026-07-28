@@ -60,7 +60,6 @@ forge:
     env:
       runner:
         PUSH_TOKEN: "${PUSH_TOKEN}"
-        PUSH_TOKEN_SOURCE: "${PUSH_TOKEN_SOURCE}"
         REPO_FULL_NAME: "${REPO_FULL_NAME}"
       sandbox:
         REPO_FULL_NAME: "${REPO_FULL_NAME}"

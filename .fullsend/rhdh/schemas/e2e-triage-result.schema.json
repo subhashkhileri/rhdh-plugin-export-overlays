@@ -29,7 +29,7 @@
     "workspace_classification": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["workspace", "fix_category", "tests", "root_cause"],
+      "required": ["workspace", "fix_category", "tests", "root_cause", "root_cause_slug"],
       "properties": {
         "workspace": {
           "type": "string",
@@ -122,17 +122,11 @@
       },
       "allOf": [
         {
-          "if": {
-            "properties": { "action": { "const": "create" } },
-            "required": ["action"]
-          },
+          "if": { "properties": { "action": { "const": "create" } } },
           "then": { "required": ["title", "body"] }
         },
         {
-          "if": {
-            "properties": { "action": { "const": "comment" } },
-            "required": ["action"]
-          },
+          "if": { "properties": { "action": { "const": "comment" } } },
           "then": { "required": ["number", "body"] }
         }
       ]

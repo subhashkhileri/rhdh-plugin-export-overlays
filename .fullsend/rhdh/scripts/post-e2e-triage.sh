@@ -25,7 +25,6 @@
 #
 # Optional environment variables:
 #   PUSH_TOKEN        — dedicated token with issues:write (falls back to GH_TOKEN)
-#   PUSH_TOKEN_SOURCE — "github-app" when PUSH_TOKEN is from mint service
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -135,7 +134,6 @@ if ! jq empty "${RESULT_FILE}" 2>/dev/null; then
   exit 1
 fi
 
-TARGET_BRANCH="$(jq -r '.target_branch // "main"' "${RESULT_FILE}")"
 WORKSPACE_COUNT="$(jq '.workspaces | length' "${RESULT_FILE}")"
 
 if [[ -z "${WORKSPACE_COUNT}" || "${WORKSPACE_COUNT}" -lt 1 ]]; then
@@ -143,7 +141,7 @@ if [[ -z "${WORKSPACE_COUNT}" || "${WORKSPACE_COUNT}" -lt 1 ]]; then
   exit 1
 fi
 
-echo "Target branch: ${TARGET_BRANCH}"
+echo "Target branch: $(jq -r '.target_branch // "main"' "${RESULT_FILE}")"
 echo "Workspaces to process: ${WORKSPACE_COUNT}"
 
 # ---------------------------------------------------------------------------
@@ -168,11 +166,9 @@ fi
 declare -a SUMMARY_LINES=()
 
 for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
-  WS_NAME="$(jq -r ".workspaces[$i].workspace" "${RESULT_FILE}")"
-  FIX_CAT="$(jq -r ".workspaces[$i].fix_category" "${RESULT_FILE}")"
-  ROOT_CAUSE="$(jq -r ".workspaces[$i].root_cause" "${RESULT_FILE}")"
-  TEST_COUNT="$(jq ".workspaces[$i].tests | length" "${RESULT_FILE}")"
-  ISSUE_ACTION="$(jq -r ".workspaces[$i].issue.action // \"skip\"" "${RESULT_FILE}")"
+  read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION < <(
+    jq -r ".workspaces[$i] | [.workspace, .fix_category, (.tests|length), (.issue.action // \"skip\")] | @tsv" "${RESULT_FILE}"
+  )
 
   echo ""
   echo "--- Workspace: ${WS_NAME} (${FIX_CAT}) ---"
@@ -184,6 +180,9 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
       echo "  Creating GitHub issue..."
       ISSUE_TITLE="$(jq -r ".workspaces[$i].issue.title" "${RESULT_FILE}")"
       ISSUE_BODY="$(jq -r ".workspaces[$i].issue.body" "${RESULT_FILE}")"
+      if [[ -n "${TRIGGER_ISSUE_URL}" ]]; then
+        ISSUE_BODY="${ISSUE_BODY}"$'\n\n'"---"$'\n'"Triggered by ${TRIGGER_ISSUE_URL}"
+      fi
 
       # Create issue WITHOUT labels — labels are added separately via the
       # labels API so that ready-to-code fires a proper issues.labeled event
@@ -196,19 +195,16 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
         echo "  Created issue #${ISSUE_NUMBER}: ${ISSUE_URL}"
         ISSUE_REF="#${ISSUE_NUMBER}"
 
-        # Add labels via labels API. Add ready-to-code LAST so its
-        # labeled event is the final webhook and triggers the coder.
-        DEFERRED_LABEL=""
-        while IFS= read -r label; do
-          [[ -z "${label}" ]] && continue
-          if [[ "${label}" == "ready-to-code" ]]; then
-            DEFERRED_LABEL="${label}"
-          else
-            add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "${label}"
-          fi
-        done < <(jq -r ".workspaces[$i].issue.labels // [] | .[]" "${RESULT_FILE}")
-        if [[ -n "${DEFERRED_LABEL}" ]]; then
-          add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "${DEFERRED_LABEL}"
+        # Add labels via labels API. Batch non-deferred labels into one
+        # call, then add ready-to-code LAST so its labeled event is the
+        # final webhook and triggers the coder.
+        NON_DEFERRED="$(jq -c "[.workspaces[$i].issue.labels // [] | .[] | select(. != \"ready-to-code\")]" "${RESULT_FILE}")"
+        HAS_DEFERRED="$(jq -r ".workspaces[$i].issue.labels // [] | map(select(. == \"ready-to-code\")) | length > 0" "${RESULT_FILE}")"
+        if [[ "${NON_DEFERRED}" != "[]" ]]; then
+          echo "${NON_DEFERRED}" | gh api "repos/${REPO_FULL_NAME}/issues/${ISSUE_NUMBER}/labels" --input - --silent 2>/dev/null || true
+        fi
+        if [[ "${HAS_DEFERRED}" == "true" ]]; then
+          add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"
         fi
       else
         echo "::warning::Failed to create issue for ${WS_NAME}: $(sanitize_for_gha "${ISSUE_URL}")"
@@ -246,6 +242,7 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
   esac
 
   SUMMARY_LINES+=("| ${WS_NAME} | \`${FIX_CAT}\` | ${TEST_COUNT} | ${ISSUE_REF:-—} |")
+  echo "  [${WS_NAME}] ${FIX_CAT} — ${TEST_COUNT} test(s) — ${ISSUE_ACTION}"
 done
 
 # ---------------------------------------------------------------------------
@@ -272,21 +269,8 @@ if [[ -n "${TRIGGER_ISSUE_NUMBER}" ]]; then
     --body-file - 2>/dev/null || echo "::warning::Failed to comment on trigger issue"
 fi
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
 echo ""
 echo "=== E2E Triage Results ==="
 echo "Workspaces: ${WORKSPACE_COUNT}"
-
-for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
-  WS_NAME="$(jq -r ".workspaces[$i].workspace" "${RESULT_FILE}")"
-  FIX_CAT="$(jq -r ".workspaces[$i].fix_category" "${RESULT_FILE}")"
-  TEST_COUNT="$(jq ".workspaces[$i].tests | length" "${RESULT_FILE}")"
-  ISSUE_ACTION="$(jq -r ".workspaces[$i].issue.action // \"skip\"" "${RESULT_FILE}")"
-
-  echo "  [${WS_NAME}] ${FIX_CAT} — ${TEST_COUNT} test(s) — ${ISSUE_ACTION}"
-done
-
 echo ""
 echo "Post-e2e-triage complete."
