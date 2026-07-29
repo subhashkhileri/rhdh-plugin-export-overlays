@@ -92,7 +92,7 @@ install_gitleaks() {
     echo "gitleaks installed"
     return 0
   fi
-  echo "::warning::Failed to install gitleaks — secret scans will be skipped"
+  echo "::error::Failed to install gitleaks"
   return 1
 }
 
@@ -153,18 +153,20 @@ echo "Workspaces to process: ${WORKSPACE_COUNT}"
 # ---------------------------------------------------------------------------
 # 2. Scan agent-result.json for secrets
 # ---------------------------------------------------------------------------
-if install_gitleaks; then
-  echo "Scanning agent-result.json for secrets..."
-  SCAN_DIR="$(mktemp -d)"
-  cp "${RESULT_FILE}" "${SCAN_DIR}/agent-result.json"
-  if ! gitleaks detect --source "${SCAN_DIR}" --no-git --redact 2>/dev/null; then
-    echo "::error::Secret detected in agent-result.json — refusing to post"
-    rm -rf "${SCAN_DIR}"
-    exit 1
-  fi
-  rm -rf "${SCAN_DIR}"
-  echo "Result file scan passed"
+if ! install_gitleaks; then
+  echo "::error::Failed to install gitleaks — refusing to post without secret scan"
+  exit 1
 fi
+echo "Scanning agent-result.json for secrets..."
+SCAN_DIR="$(mktemp -d)"
+cp "${RESULT_FILE}" "${SCAN_DIR}/agent-result.json"
+if ! gitleaks detect --source "${SCAN_DIR}" --no-git --redact 2>/dev/null; then
+  echo "::error::Secret detected in agent-result.json — refusing to post"
+  rm -rf "${SCAN_DIR}"
+  exit 1
+fi
+rm -rf "${SCAN_DIR}"
+echo "Result file scan passed"
 
 # ---------------------------------------------------------------------------
 # 3. Execute issue directives per workspace
