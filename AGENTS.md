@@ -448,9 +448,7 @@ Two Claude Code skills are available at `.claude/skills/` for investigating E2E 
 When fixing E2E test failures from `[fullsend] E2E:` issues:
 
 ### Allowed modifications
-- `workspaces/<workspace>/e2e-tests/tests/specs/` — test specs
-- `workspaces/<workspace>/e2e-tests/tests/config/` — app-config, secrets
-- `workspaces/<workspace>/e2e-tests/playwright.config.ts`
+- `workspaces/<workspace>/e2e-tests/` — any file under the e2e-tests directory
 
 ### Prohibited modifications
 - Plugin source code (`workspaces/*/plugins/`)
@@ -461,13 +459,7 @@ When fixing E2E test failures from `[fullsend] E2E:` issues:
 When the issue says `fix_category: product_bug`, add `test.skip` instead
 of fixing the test:
 
-    test.skip(isNightlyMode, "<root cause summary>");
-
-If `isNightlyMode` is not defined in the file, add:
-
-    const isNightlyMode =
-      !!process.env.E2E_NIGHTLY_MODE ||
-      (process.env.JOB_NAME?.includes("periodic-") ?? false);
+    test.skip(!!process.env.E2E_NIGHTLY_MODE, "<root cause summary>");
 
 ### Verification
 After changes, run from the workspace's e2e-tests directory:
