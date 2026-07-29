@@ -80,6 +80,7 @@ install_gitleaks() {
   case "${arch_name}" in
     x86_64) arch_name="x64" ;;
     aarch64|arm64) arch_name="arm64" ;;
+    *) echo "::warning::Unsupported architecture: ${arch_name}"; return 1 ;;
   esac
   if curl -fsSL --proto =https \
     "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_${os_name}_${arch_name}.tar.gz" \
