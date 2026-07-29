@@ -367,9 +367,9 @@ and dedup results.
 
    This is a product bug — do not fix the test. Instead, add `test.skip`:
 
-       test.skip(isNightlyMode, "<root cause summary>");
+       test.skip(!!process.env.E2E_NIGHTLY_MODE, "<root cause summary>");
 
-   See AGENTS.md "Skipping tests" section for the `isNightlyMode` pattern.
+   See AGENTS.md "Skipping tests" section.
    ```
 
 7. Prow URL:
@@ -381,23 +381,57 @@ and dedup results.
 
 ### Umbrella issue (≥3 workspaces with same root cause)
 
-When ≥3 workspaces share the same `root_cause_slug`, create ONE umbrella
-issue instead of per-workspace issues:
+When ≥3 workspaces share the same `root_cause_slug`, emit **ONE entry**
+in the `workspaces` array — not one per workspace. **Do NOT emit separate
+entries for sibling workspaces covered by the umbrella.**
 
-**Title:** `[fullsend] E2E: <root-cause-slug> — <short description>`
+**Structured output rules for umbrella entries:**
+- `workspace`: use the `root_cause_slug` (e.g., `oci-resolution`), not a
+  directory name
+- `tests`: combine all failing tests from all affected workspaces
+- `root_cause`: shared analysis covering all workspaces
+- `issue.action`: `create` (or `comment` if umbrella already exists)
+- `issue.title`: `[fullsend] E2E: <root-cause-slug> — <short description>`
+- `issue.body`: one tracking line per workspace, then per-workspace
+  sections with analysis and remediation
 
-**Body includes one tracking line per workspace:**
+**Body structure for umbrella issues:**
 ```
 `fullsend-tracking: workspace=argocd root-cause=oci-resolution branch=main`
 `fullsend-tracking: workspace=tekton root-cause=oci-resolution branch=main`
 `fullsend-tracking: workspace=topology root-cause=oci-resolution branch=main`
+
+## Classification
+
+`fix_category: test_fix`
+
+## argocd
+
+### Failed Tests
+| Test | Error |
+|------|-------|
+| ... | ... |
+
+### Remediation
+<specific fix instructions for argocd>
+
+## tekton
+
+### Failed Tests
+...
+
+### Remediation
+<specific fix instructions for tekton>
+
+## Artifacts
+
+<prow URL>
 ```
 
 **Labels:** `e2e-failure`, `ready-to-code`
 
 The scaffold coder reads this single issue and fixes all workspaces in one
-branch/PR. List all affected workspaces, the files to modify in each, and
-the fix instructions.
+branch/PR.
 
 For ≤2 workspaces with the same cause, use per-workspace issues (each
 triggers its own coder run).
@@ -453,12 +487,16 @@ If validation fails, read the error output, fix the JSON, and re-run.
 
 **Field rules:**
 - `target_branch`: the branch detected from the Prow URL
-- `workspace`: the workspace directory name (e.g., `argocd`, `orchestrator`)
-- `tests`: array of `{name, error}` for every failing test in this workspace
+- `workspace`: the workspace directory name (e.g., `argocd`, `orchestrator`).
+  For umbrella entries (≥3 workspaces with same root cause), use the
+  `root_cause_slug` instead (e.g., `oci-resolution`)
+- `tests`: array of `{name, error}` for every failing test in this workspace.
+  For umbrella entries, combine tests from all affected workspaces
 - `root_cause_slug`: short kebab-case slug (e.g., `route-wait`)
 - `issue.action`: `"create"` for new issue, `"comment"` to update existing,
   `"skip"` if no issue action (infra_flake)
 - `issue.cycle_ready_to_code`: `true` when issue exists but has no linked PR
+- Do NOT emit separate entries for workspaces covered by an umbrella entry
 - Do NOT include extra keys — the schema enforces `additionalProperties: false`
 
 After writing and validating, output a human-readable summary:
