@@ -209,7 +209,9 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
         NON_DEFERRED="$(jq -c "[.workspaces[$i].issue.labels // [] | .[] | select(. != \"ready-to-code\")]" "${RESULT_FILE}")"
         HAS_DEFERRED="$(jq -r ".workspaces[$i].issue.labels // [] | map(select(. == \"ready-to-code\")) | length > 0" "${RESULT_FILE}")"
         if [[ "${NON_DEFERRED}" != "[]" ]]; then
-          echo "${NON_DEFERRED}" | gh api "repos/${REPO_FULL_NAME}/issues/${ISSUE_NUMBER}/labels" --input - --silent 2>/dev/null || true
+          if ! echo "${NON_DEFERRED}" | gh api "repos/${REPO_FULL_NAME}/issues/${ISSUE_NUMBER}/labels" --input - --silent 2>/dev/null; then
+            echo "::warning::Failed to add batch labels to #${ISSUE_NUMBER}"
+          fi
         fi
         if [[ "${HAS_DEFERRED}" == "true" ]]; then
           add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"

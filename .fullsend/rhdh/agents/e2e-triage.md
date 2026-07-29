@@ -270,23 +270,28 @@ WORKSPACE="<workspace-name>"
 REPO="redhat-developer/rhdh-plugin-export-overlays"
 
 # 1. Search for any open issue mentioning this workspace
-EXISTING=$(curl -sf "https://api.github.com/search/issues" \
-  --data-urlencode "q=repo:${REPO} is:issue state:open \"fullsend-tracking: workspace=${WORKSPACE}\" in:body" \
-  | jq '[.items[] | {number, title, url: .html_url}]')
+EXISTING=$(gh api -X GET search/issues \
+  -f q="repo:${REPO} is:issue state:open \"fullsend-tracking: workspace=${WORKSPACE}\" in:body" \
+  --jq '[.items[] | {number, title, url: .html_url}]')
 
-# 2. If found, check if it has a linked PR
-WITH_PR=$(curl -sf "https://api.github.com/search/issues" \
-  --data-urlencode "q=repo:${REPO} is:issue state:open linked:pr \"fullsend-tracking: workspace=${WORKSPACE}\" in:body" \
-  | jq '[.items[] | {number, title}]')
+# 2. If found, check if it has an OPEN linked PR.
+#    linked:pr matches open, closed, and merged PRs — so also check
+#    the PR state to distinguish "coder working" from "PR closed/abandoned".
+ISSUE_NUMBER=$(echo "${EXISTING}" | jq -r '.[0].number // empty')
+if [[ -n "${ISSUE_NUMBER}" ]]; then
+  LINKED_PRS=$(gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/timeline" \
+    --jq '[.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null) | {number: .source.issue.number, state: .source.issue.state}]')
+  HAS_OPEN_PR=$(echo "${LINKED_PRS}" | jq 'any(.[]; .state == "open")')
+fi
 ```
 
 ### Decision matrix
 
-| Issue found | Has linked PR | Action |
-|-------------|---------------|--------|
+| Issue found | Open linked PR | Action |
+|-------------|----------------|--------|
 | No | — | Emit `create` directive |
 | Yes | Yes | Emit `comment` (coder already working, skip) |
-| Yes | No | Emit `comment` + `cycle_ready_to_code: true` |
+| Yes | No (or closed/merged) | Emit `comment` + `cycle_ready_to_code: true` |
 
 When commenting, include the latest analysis so the issue stays current.
 
@@ -297,9 +302,9 @@ umbrella issue:
 
 ```bash
 ROOT_CAUSE_SLUG="<slug>"
-curl -sf "https://api.github.com/search/issues" \
-  --data-urlencode "q=repo:${REPO} is:issue state:open \"fullsend-tracking: root-cause=${ROOT_CAUSE_SLUG}\" in:body" \
-  | jq '[.items[] | {number, title, url: .html_url}]'
+gh api -X GET search/issues \
+  -f q="repo:${REPO} is:issue state:open \"fullsend-tracking: root-cause=${ROOT_CAUSE_SLUG}\" in:body" \
+  --jq '[.items[] | {number, title, url: .html_url}]'
 ```
 
 ---
@@ -354,10 +359,14 @@ and dedup results.
    ```
    ## Remediation
 
+   **Target branch:** `<TARGET_BRANCH>`
+
    <specific files to modify, what to change, what pattern to follow>
    ```
-   The scaffold coder reads this issue and implements the fix. Vague
-   instructions like "fix the timeout" produce vague fixes. Instead:
+   Always state the target branch explicitly so the scaffold coder opens
+   the PR against the correct branch. The scaffold coder reads this issue
+   and implements the fix. Vague instructions like "fix the timeout"
+   produce vague fixes. Instead:
    "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts` line 42,
    increase the route wait timeout from 30s to 60s."
 
