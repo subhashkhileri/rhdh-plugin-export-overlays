@@ -1,7 +1,7 @@
 # E2E nightly triage — discovers failed nightly runs and creates a labeled
 # GitHub issue. The fullsend dispatch picks up the label event and routes
 # it to the e2e-triage agent, which classifies failures per workspace and
-# creates issues for the scaffold coder to fix.
+# creates issues for the code agent to fix.
 #
 # Flow:
 #   schedule/manual → discover failed nightly → create issue + label
@@ -12,7 +12,7 @@
 #                                                     ↓
 #                           triage creates per-workspace issues + ready-to-code
 #                                                     ↓
-#                           scaffold coder picks up each issue → fix → PR
+#                           code agent picks up each issue → fix → PR
 #
 # The e2e-triage agent is NOT reachable from /fs-* comments.
 name: E2E Triage Agent
@@ -139,7 +139,7 @@ jobs:
 
           PROW_URL: ${PROW_URL}
 
-          The e2e-triage agent will analyze this failure, classify root causes per workspace, and create issues for the scaffold coder to fix.")
+          The e2e-triage agent will analyze this failure, classify root causes per workspace, and create issues for the code agent to fix.")
           echo "Created issue: ${ISSUE_URL}"
 
           # Add label separately so GitHub fires an issues:labeled event

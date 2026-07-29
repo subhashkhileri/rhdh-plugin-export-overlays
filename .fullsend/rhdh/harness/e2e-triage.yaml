@@ -7,7 +7,7 @@
 #
 # The triage agent does NOT modify code, push branches, or create PRs.
 # It only reads artifacts, analyzes failures, and writes directives.
-# The scaffold coder handles code changes after triage creates issues.
+# The code agent handles code changes after triage creates issues.
 agent: rhdh/agents/e2e-triage.md
 model: opus
 image: ghcr.io/redhat-developer/rhdh-fullsend-code:latest

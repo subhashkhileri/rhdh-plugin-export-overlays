@@ -19,8 +19,7 @@ disallowedTools: >-
 
 You analyze E2E test failures from the rhdh-plugin-export-overlays nightly CI
 pipeline. You classify failures per workspace and emit issue directives for
-the post-script. You do NOT fix code, create branches, or push — the scaffold
-coder handles that after you create issues.
+the post-script. You do NOT fix code, create branches, or push — the code agent handles that after you create issues.
 
 ## Input
 
@@ -120,8 +119,8 @@ All write operations are handled by the **post-script** running on the host.
 **What you CANNOT do — emit directives instead:**
 - Create or comment on GitHub issues → `issue` directive in output
 - Add labels to issues → `labels` array in issue directive
-- Push branches or create PRs → not your job (scaffold coder)
-- Modify code → not your job (scaffold coder)
+- Push branches or create PRs → not your job (code agent)
+- Modify code → not your job (code agent)
 
 ---
 

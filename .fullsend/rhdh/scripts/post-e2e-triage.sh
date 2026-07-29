@@ -7,7 +7,7 @@
 # executes with the appropriate credentials.
 #
 # This script does NOT:
-#   - Push branches or create PRs (scaffold coder handles that)
+#   - Push branches or create PRs (code agent handles that)
 #   - Perform dedup logic (the agent handles dedup in Phase 4)
 #   - Manage JIRA (removed from triage pipeline)
 #
@@ -179,8 +179,10 @@ echo "Result file scan passed"
 declare -a SUMMARY_LINES=()
 
 for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
+  WS_JSON="$(jq -c ".workspaces[$i]" "${RESULT_FILE}")"
+
   IFS=$'\t' read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION ROOT_SLUG < <(
-    jq -r ".workspaces[$i] | [.workspace, .fix_category, (.tests|length), (.issue.action // \"skip\"), .root_cause_slug] | @tsv" "${RESULT_FILE}"
+    echo "${WS_JSON}" | jq -r '[.workspace, .fix_category, (.tests|length), (.issue.action // "skip"), .root_cause_slug] | @tsv'
   )
 
   echo ""
@@ -191,8 +193,8 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
   case "${ISSUE_ACTION}" in
     create)
       echo "  Creating GitHub issue..."
-      ISSUE_TITLE="$(jq -r ".workspaces[$i].issue.title" "${RESULT_FILE}")"
-      ISSUE_BODY="$(jq -r ".workspaces[$i].issue.body" "${RESULT_FILE}")"
+      ISSUE_TITLE="$(echo "${WS_JSON}" | jq -r '.issue.title')"
+      ISSUE_BODY="$(echo "${WS_JSON}" | jq -r '.issue.body')"
       if [[ -n "${TRIGGER_ISSUE_URL}" ]]; then
         ISSUE_BODY="${ISSUE_BODY}"$'\n\n'"---"$'\n'"Triggered by ${TRIGGER_ISSUE_URL}"
       fi
@@ -218,8 +220,8 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
         # Add labels via labels API. Batch non-deferred labels into one
         # call, then add ready-to-code LAST so its labeled event is the
         # final webhook and triggers the coder.
-        NON_DEFERRED="$(jq -c "[.workspaces[$i].issue.labels // [] | .[] | select(. != \"ready-to-code\")]" "${RESULT_FILE}")"
-        HAS_DEFERRED="$(jq -r ".workspaces[$i].issue.labels // [] | map(select(. == \"ready-to-code\")) | length > 0" "${RESULT_FILE}")"
+        NON_DEFERRED="$(echo "${WS_JSON}" | jq -c '[.issue.labels // [] | .[] | select(. != "ready-to-code")]')"
+        HAS_DEFERRED="$(echo "${WS_JSON}" | jq -r '.issue.labels // [] | map(select(. == "ready-to-code")) | length > 0')"
         if [[ "${NON_DEFERRED}" != "[]" ]]; then
           if ! echo "${NON_DEFERRED}" | gh api "repos/${REPO_FULL_NAME}/issues/${ISSUE_NUMBER}/labels" --input - --silent 2>/dev/null; then
             echo "::warning::Failed to add batch labels to #${ISSUE_NUMBER}"
@@ -235,9 +237,9 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
       ;;
 
     comment)
-      ISSUE_NUMBER="$(jq -r ".workspaces[$i].issue.number" "${RESULT_FILE}")"
-      COMMENT_BODY="$(jq -r ".workspaces[$i].issue.body" "${RESULT_FILE}")"
-      CYCLE="$(jq -r ".workspaces[$i].issue.cycle_ready_to_code // false" "${RESULT_FILE}")"
+      ISSUE_NUMBER="$(echo "${WS_JSON}" | jq -r '.issue.number')"
+      COMMENT_BODY="$(echo "${WS_JSON}" | jq -r '.issue.body')"
+      CYCLE="$(echo "${WS_JSON}" | jq -r '.issue.cycle_ready_to_code // false')"
 
       echo "  Commenting on issue #${ISSUE_NUMBER}..."
       if ! gh issue comment "${ISSUE_NUMBER}" \
