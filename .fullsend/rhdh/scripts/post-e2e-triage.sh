@@ -245,6 +245,10 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
     skip)
       echo "  No issue directive — skipping"
       ;;
+
+    *)
+      echo "::warning::Unknown issue action '${ISSUE_ACTION}' for ${WS_NAME} — skipping"
+      ;;
   esac
 
   SUMMARY_LINES+=("| ${WS_NAME} | \`${FIX_CAT}\` | ${TEST_COUNT} | ${ISSUE_REF:-—} |")
