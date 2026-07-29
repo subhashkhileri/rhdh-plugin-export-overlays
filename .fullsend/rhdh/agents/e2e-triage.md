@@ -215,12 +215,12 @@ classification happens — using the evidence from all workspaces together.
 Classify each failure independently, then organize by workspace. For each
 workspace, assign a `fix_category`:
 
-| Category | When | Resulting action |
-|----------|------|-----------------|
-| `infra_flake` | Transient infra issue (OCP cluster, network, timing) | No issue — add to trigger issue summary |
-| `test_fix` | Test code, config, or deployment config needs updating | Create issue + `ready-to-code` |
-| `product_bug` | Bug in plugin source code (not in this repo) | Create issue + `ready-to-code` |
-| `environment` | CI env problem (expired creds, missing secrets, quota) | Create issue (no `ready-to-code`) |
+| Category | When |
+|----------|------|
+| `infra_flake` | Transient infra issue (OCP cluster, network, timing) |
+| `test_fix` | Test code, config, or deployment config needs updating |
+| `product_bug` | Bug in plugin source code (not in this repo) |
+| `environment` | CI env problem (expired creds, missing secrets, quota) |
 
 **Decision guide:**
 - If the test assertion is wrong or outdated → `test_fix`
@@ -314,141 +314,79 @@ gh api -X GET search/issues \
 For each workspace, write an issue directive based on the classification
 and dedup results.
 
-### Per-workspace issue (≤2 workspaces with same root cause)
+### Category → action mapping
 
-| Category | Labels | `ready-to-code` |
-|----------|--------|-----------------|
-| `test_fix` | `e2e-failure` | Yes |
-| `product_bug` | `e2e-failure` | Yes |
-| `environment` | `e2e-failure` | No |
-| `infra_flake` | (no issue) | — |
+| Category | Labels | `ready-to-code` | Issue |
+|----------|--------|-----------------|-------|
+| `test_fix` | `e2e-failure` | Yes | Create |
+| `product_bug` | `e2e-failure` | Yes | Create |
+| `environment` | `e2e-failure` | No | Create |
+| `infra_flake` | — | — | None (summary only) |
 
-**Issue title format:** `[fullsend] E2E: <workspace> — <short description>`
-
-**Issue body must include:**
-
-1. **Tracking line** (first line, visible, searchable):
-   ```
-   `fullsend-tracking: workspace=<name> root-cause=<slug> branch=<branch>`
-   ```
-
-2. Classification section:
-   ```
-   ## Classification
-
-   `fix_category: <CATEGORY>`
-   ```
-
-3. Failed tests table:
-   ```
-   ## Failed Tests
-
-   | Test | Error |
-   |------|-------|
-   | <test name> | <error summary> |
-   ```
-
-4. Root cause analysis:
-   ```
-   ## Root Cause
-
-   <detailed analysis from Phase 2>
-   ```
-
-5. Remediation instructions — **be prescriptive**:
-   ```
-   ## Remediation
-
-   **Target branch:** `<TARGET_BRANCH>`
-
-   <specific files to modify, what to change, what pattern to follow>
-   ```
-   Always state the target branch explicitly so the scaffold coder opens
-   the PR against the correct branch. The scaffold coder reads this issue
-   and implements the fix. Vague instructions like "fix the timeout"
-   produce vague fixes. Instead:
-   "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts` line 42,
-   increase the route wait timeout from 30s to 60s."
-
-6. For `product_bug` — explicit skip instruction:
-   ```
-   ## Remediation
-
-   This is a product bug — do not fix the test. Instead, add `test.skip`:
-
-       test.skip(!!process.env.E2E_NIGHTLY_MODE, "<root cause summary>");
-
-   See AGENTS.md "Skipping tests" section.
-   ```
-
-7. Prow URL:
-   ```
-   ## Artifacts
-
-   <prow URL>
-   ```
-
-### Umbrella issue (≥3 workspaces with same root cause)
+### Umbrella rule
 
 When ≥3 workspaces share the same `root_cause_slug`, emit **ONE entry**
 in the `workspaces` array — not one per workspace. **Do NOT emit separate
-entries for sibling workspaces covered by the umbrella.**
+entries for sibling workspaces.** The code agent reads this single issue
+and fixes all workspaces in one branch/PR. For ≤2 workspaces with the
+same cause, use per-workspace issues (each triggers its own coder run).
 
-**Structured output rules for umbrella entries:**
-- `workspace`: use the `root_cause_slug` (e.g., `oci-resolution`), not a
-  directory name
-- `tests`: combine all failing tests from all affected workspaces
-- `root_cause`: shared analysis covering all workspaces
-- `issue.action`: `create` (or `comment` if umbrella already exists)
+Umbrella entries use:
+- `workspace`: the `root_cause_slug` (not a directory name)
+- `tests`: combined from all affected workspaces
 - `issue.title`: `[fullsend] E2E: <root-cause-slug> — <short description>`
-- `issue.body`: one tracking line per workspace, then per-workspace
-  sections with analysis and remediation
 
-**Body structure for umbrella issues:**
+### Issue body template
+
+All issues (per-workspace and umbrella) use the same structure.
+For umbrella issues, the sections from `## <workspace>` through
+`### Remediation` repeat per workspace; other sections appear once.
+
 ```
-`fullsend-tracking: workspace=argocd root-cause=oci-resolution branch=main`
-`fullsend-tracking: workspace=tekton root-cause=oci-resolution branch=main`
-`fullsend-tracking: workspace=topology root-cause=oci-resolution branch=main`
+<tracking lines — one per affected workspace>
+`fullsend-tracking: workspace=<name> root-cause=<slug> branch=<branch>`
 
 ## Classification
 
-`fix_category: test_fix`
+`fix_category: <CATEGORY>`
 
-## argocd
+## <workspace>                       ← omit heading for single-workspace issues
 
 ### Failed Tests
+
 | Test | Error |
 |------|-------|
-| ... | ... |
+| <test name> | <error summary> |
+
+### Root Cause
+
+<detailed analysis from Phase 2>
 
 ### Remediation
-<specific fix instructions for argocd>
 
-## tekton
+**Target branch:** `<TARGET_BRANCH>`
 
-### Failed Tests
-...
-
-### Remediation
-<specific fix instructions for tekton>
+<specific files to modify, what to change, what pattern to follow>
 
 ## Artifacts
 
 <prow URL>
 ```
 
-**Labels:** `e2e-failure`, `ready-to-code`
+**Title format:** `[fullsend] E2E: <workspace-or-slug> — <short description>`
 
-The scaffold coder reads this single issue and fixes all workspaces in one
-branch/PR.
+### Remediation guidelines
 
-For ≤2 workspaces with the same cause, use per-workspace issues (each
-triggers its own coder run).
+- **Always include `Target branch`** so the code agent opens the PR
+  against the correct branch.
+- **Be prescriptive.** Vague instructions produce vague fixes. Instead of
+  "fix the timeout", write:
+  "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts` line 42,
+  increase the route wait timeout from 30s to 60s."
+- **For `product_bug`** — do not fix the test. Remediation should instruct
+  adding `test.skip`:
 
-### `infra_flake` — no issue
-
-Do not create an issue. The post-script will include infra_flake workspaces
-in the summary comment on the trigger issue.
+      test.skip(!!process.env.E2E_NIGHTLY_MODE, "<root cause summary>");
 
 ---
 
@@ -496,16 +434,11 @@ If validation fails, read the error output, fix the JSON, and re-run.
 
 **Field rules:**
 - `target_branch`: the branch detected from the Prow URL
-- `workspace`: the workspace directory name (e.g., `argocd`, `orchestrator`).
-  For umbrella entries (≥3 workspaces with same root cause), use the
-  `root_cause_slug` instead (e.g., `oci-resolution`)
-- `tests`: array of `{name, error}` for every failing test in this workspace.
-  For umbrella entries, combine tests from all affected workspaces
+- `workspace`: directory name, or `root_cause_slug` for umbrella entries
+  (see Phase 5 umbrella rule)
 - `root_cause_slug`: short kebab-case slug (e.g., `route-wait`)
-- `issue.action`: `"create"` for new issue, `"comment"` to update existing,
-  `"skip"` if no issue action (infra_flake)
-- `issue.cycle_ready_to_code`: `true` when issue exists but has no linked PR
-- Do NOT emit separate entries for workspaces covered by an umbrella entry
+- `issue.action`: `"create"` | `"comment"` | `"skip"` (from Phase 4 dedup)
+- `issue.cycle_ready_to_code`: `true` when issue exists but has no open PR
 - Do NOT include extra keys — the schema enforces `additionalProperties: false`
 
 After writing and validating, output a human-readable summary:
@@ -561,10 +494,5 @@ Workspaces classified: <N>
 
 ### Issue body quality
 
-The scaffold coder's fix quality depends entirely on the quality of your
-issue body. Write **prescriptive** remediation instructions:
-
-**Bad:** "Fix the argocd test timeout"
-**Good:** "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts` line
-42, increase the route wait timeout from 30s to 60s. The current 30s is
-insufficient because the OCP route takes 40-50s to propagate in CI."
+The code agent's fix quality depends entirely on your issue body.
+See Phase 5 remediation guidelines for prescriptive writing rules.
