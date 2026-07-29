@@ -57,12 +57,15 @@ fi
 # ---------------------------------------------------------------------------
 
 sanitize_for_gha() {
-  local text="${1:-}"
-  text="${text//::/}"
-  text="${text//%0A/}"
-  text="${text//%0a/}"
-  text="${text//%0D/}"
-  text="${text//%0d/}"
+  local text="${1:-}" prev=""
+  while [[ "${text}" != "${prev}" ]]; do
+    prev="${text}"
+    text="${text//::/}"
+    text="${text//\%0A/}"
+    text="${text//\%0a/}"
+    text="${text//\%0D/}"
+    text="${text//\%0d/}"
+  done
   text="${text//$'\n'/ }"
   text="${text//$'\r'/}"
   echo "${text}"
@@ -74,16 +77,8 @@ install_gitleaks() {
   fi
   echo "Installing gitleaks v${GITLEAKS_VERSION}..."
   mkdir -p "${HOME}/.local/bin"
-  local os_name arch_name
-  os_name="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  arch_name="$(uname -m)"
-  case "${arch_name}" in
-    x86_64) arch_name="x64" ;;
-    aarch64|arm64) arch_name="arm64" ;;
-    *) echo "::warning::Unsupported architecture: ${arch_name}"; return 1 ;;
-  esac
   if curl -fsSL --proto =https \
-    "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_${os_name}_${arch_name}.tar.gz" \
+    "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
     -o /tmp/gitleaks.tar.gz \
     && echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c --quiet \
     && tar xzf /tmp/gitleaks.tar.gz -C "${HOME}/.local/bin" gitleaks \
@@ -174,7 +169,7 @@ echo "Result file scan passed"
 declare -a SUMMARY_LINES=()
 
 for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
-  read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION < <(
+  IFS=$'\t' read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION < <(
     jq -r ".workspaces[$i] | [.workspace, .fix_category, (.tests|length), (.issue.action // \"skip\")] | @tsv" "${RESULT_FILE}"
   )
 
@@ -195,11 +190,18 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
       # Create issue WITHOUT labels — labels are added separately via the
       # labels API so that ready-to-code fires a proper issues.labeled event
       # (gh issue create --label does NOT emit a separate labeled event).
+      local create_stderr
+      create_stderr="$(mktemp)"
       if ISSUE_URL="$(gh issue create \
         --repo "${REPO_FULL_NAME}" \
         --title "${ISSUE_TITLE}" \
-        --body "${ISSUE_BODY}" 2>&1)"; then
-        ISSUE_NUMBER="$(echo "${ISSUE_URL}" | grep -o '[0-9]*$')"
+        --body "${ISSUE_BODY}" 2>"${create_stderr}")"; then
+        ISSUE_NUMBER="${ISSUE_URL##*/}"
+        if [[ ! "${ISSUE_NUMBER}" =~ ^[0-9]+$ ]]; then
+          echo "::warning::Could not parse issue number from: ${ISSUE_URL}"
+          rm -f "${create_stderr}"
+          continue
+        fi
         echo "  Created issue #${ISSUE_NUMBER}: ${ISSUE_URL}"
         ISSUE_REF="#${ISSUE_NUMBER}"
 
@@ -217,8 +219,9 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
           add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"
         fi
       else
-        echo "::warning::Failed to create issue for ${WS_NAME}: $(sanitize_for_gha "${ISSUE_URL}")"
+        echo "::warning::Failed to create issue for ${WS_NAME}: $(sanitize_for_gha "$(cat "${create_stderr}")")"
       fi
+      rm -f "${create_stderr}"
       ;;
 
     comment)

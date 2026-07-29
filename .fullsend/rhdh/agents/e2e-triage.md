@@ -6,6 +6,7 @@ description: >-
   Does NOT modify code, create branches, or fix tests.
 model: opus
 disallowedTools: >-
+  Edit, Write, MultiEdit,
   Bash(git push *), Bash(git push),
   Bash(git checkout -b *), Bash(git checkout -b),
   Bash(git add *), Bash(git add),
@@ -343,8 +344,10 @@ For umbrella issues, the sections from `## <workspace>` through
 `### Remediation` repeat per workspace; other sections appear once.
 
 ```
-<tracking lines — one per affected workspace>
-`fullsend-tracking: workspace=<name> root-cause=<slug> branch=<branch>`
+<tracking lines — one line per key, per affected workspace>
+`fullsend-tracking: workspace=<name>`
+`fullsend-tracking: root-cause=<slug>`
+`fullsend-tracking: branch=<branch>`
 
 ## Classification
 
@@ -414,7 +417,7 @@ cat > "$OUTPUT_DIR/agent-result.json" << 'RESULT_EOF'
         "title": "<for create only>",
         "labels": ["e2e-failure", "ready-to-code"],
         "body": "<issue body or comment body>",
-        "number": null,
+        "number": "<for comment only — integer, not null>",
         "cycle_ready_to_code": false
       }
     }

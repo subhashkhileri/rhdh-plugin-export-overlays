@@ -94,7 +94,7 @@
           "description": "Whether to create a new issue, comment on an existing one, or skip."
         },
         "number": {
-          "type": ["integer", "null"],
+          "type": "integer",
           "description": "Existing issue number (required for comment action)."
         },
         "title": {
@@ -105,7 +105,7 @@
         },
         "labels": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": { "enum": ["e2e-failure", "ready-to-code"] },
           "maxItems": 10,
           "description": "Labels for new issue."
         },
