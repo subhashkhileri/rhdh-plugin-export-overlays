@@ -2,8 +2,9 @@
 version: 1
 
 # Sandbox policy for the e2e-triage agent.
+# forked-from: rhdh/policies/code.yaml
 #
-# Based on rhdh/policies/e2e-fix.yaml with the following differences:
+# Differences from code.yaml:
 #   - package_registries removed (triage doesn't build or install packages)
 #   - github_api remains read-only (writes happen in the post-script)
 #   - prow_artifacts retained for downloading nightly CI artifacts

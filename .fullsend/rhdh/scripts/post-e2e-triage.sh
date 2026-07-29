@@ -102,12 +102,22 @@ add_label() {
   rm -f "${stderr_file}"
 }
 
-# remove_label silently removes a label (no error if absent).
+# remove_label removes a label. Returns 0 on success or if absent (404).
 remove_label() {
   local repo="$1" issue="$2" label="$3"
-  local encoded
+  local encoded stderr_file
   encoded=$(printf '%s' "${label}" | jq -sRr @uri)
-  gh api "repos/${repo}/issues/${issue}/labels/${encoded}" -X DELETE --silent 2>/dev/null || true
+  stderr_file="$(mktemp)"
+  if gh api "repos/${repo}/issues/${issue}/labels/${encoded}" -X DELETE --silent 2>"${stderr_file}"; then
+    rm -f "${stderr_file}"
+    return 0
+  fi
+  if grep -q "404" "${stderr_file}"; then
+    rm -f "${stderr_file}"
+    return 0
+  fi
+  rm -f "${stderr_file}"
+  return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -169,8 +179,8 @@ echo "Result file scan passed"
 declare -a SUMMARY_LINES=()
 
 for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
-  IFS=$'\t' read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION < <(
-    jq -r ".workspaces[$i] | [.workspace, .fix_category, (.tests|length), (.issue.action // \"skip\")] | @tsv" "${RESULT_FILE}"
+  IFS=$'\t' read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION ROOT_SLUG < <(
+    jq -r ".workspaces[$i] | [.workspace, .fix_category, (.tests|length), (.issue.action // \"skip\"), .root_cause_slug] | @tsv" "${RESULT_FILE}"
   )
 
   echo ""
@@ -242,10 +252,13 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
       # ---------------------------------------------------------------
       if [[ "${CYCLE}" == "true" ]]; then
         echo "  Cycling ready-to-code label on #${ISSUE_NUMBER}..."
-        remove_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"
-        sleep 1
-        add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"
-        echo "  ready-to-code label cycled — coder will re-trigger"
+        if remove_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"; then
+          sleep 1
+          add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"
+          echo "  ready-to-code label cycled — coder will re-trigger"
+        else
+          echo "::warning::Failed to remove ready-to-code from #${ISSUE_NUMBER} — label cycle skipped, coder may not re-trigger"
+        fi
       fi
       ;;
 
@@ -258,7 +271,7 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
       ;;
   esac
 
-  SUMMARY_LINES+=("| ${WS_NAME} | \`${FIX_CAT}\` | ${TEST_COUNT} | ${ISSUE_REF:-—} |")
+  SUMMARY_LINES+=("| ${WS_NAME} | \`${FIX_CAT}\` | ${ROOT_SLUG} | ${TEST_COUNT} | ${ISSUE_REF:-—} |")
   echo "  [${WS_NAME}] ${FIX_CAT} — ${TEST_COUNT} test(s) — ${ISSUE_ACTION}"
 done
 
@@ -269,19 +282,19 @@ if [[ -n "${TRIGGER_ISSUE_NUMBER}" ]]; then
   echo ""
   echo "Posting summary to trigger issue #${TRIGGER_ISSUE_NUMBER}..."
 
-  SUMMARY="## Triage Summary\n\n"
-  SUMMARY+="| Workspace | Category | Tests | Issue |\n"
-  SUMMARY+="|-----------|----------|-------|-------|\n"
+  SUMMARY="## Triage Summary"$'\n\n'
+  SUMMARY+="| Workspace | Category | Root Cause | Tests | Issue |"$'\n'
+  SUMMARY+="|-----------|----------|------------|-------|-------|"$'\n'
   for line in "${SUMMARY_LINES[@]}"; do
-    SUMMARY+="${line}\n"
+    SUMMARY+="${line}"$'\n'
   done
 
   AGENT_SUMMARY="$(jq -r '.summary // empty' "${RESULT_FILE}")"
   if [[ -n "${AGENT_SUMMARY}" ]]; then
-    SUMMARY+="\n### Analysis\n\n${AGENT_SUMMARY}"
+    SUMMARY+=$'\n'"### Analysis"$'\n\n'"${AGENT_SUMMARY}"
   fi
 
-  printf '%b' "${SUMMARY}" | gh issue comment "${TRIGGER_ISSUE_NUMBER}" \
+  printf '%s' "${SUMMARY}" | gh issue comment "${TRIGGER_ISSUE_NUMBER}" \
     --repo "${REPO_FULL_NAME}" \
     --body-file - 2>/dev/null || echo "::warning::Failed to comment on trigger issue"
 fi
