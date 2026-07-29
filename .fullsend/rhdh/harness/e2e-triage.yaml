@@ -45,6 +45,7 @@ env:
   runner:
     GH_TOKEN: ${GH_TOKEN}
     REPO_FULL_NAME: redhat-developer/rhdh-plugin-export-overlays
+    GITHUB_ISSUE_URL: "${GITHUB_ISSUE_URL}"
     FULLSEND_OUTPUT_SCHEMA: ${FULLSEND_DIR}/rhdh/schemas/e2e-triage-result.schema.json
   sandbox:
     SKILL_DIR: /sandbox/claude-config/skills/e2e-failure-analysis

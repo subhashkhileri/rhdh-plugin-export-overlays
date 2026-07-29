@@ -98,7 +98,12 @@ install_gitleaks() {
 # add_label uses the labels API to avoid firing issues.edited.
 add_label() {
   local repo="$1" issue="$2" label="$3"
-  gh api "repos/${repo}/issues/${issue}/labels" -f "labels[]=${label}" --silent 2>/dev/null || true
+  local stderr_file
+  stderr_file="$(mktemp)"
+  if ! gh api "repos/${repo}/issues/${issue}/labels" -f "labels[]=${label}" --silent 2>"${stderr_file}"; then
+    echo "::warning::Failed to add label '${label}' to #${issue}: $(sanitize_for_gha "$(cat "${stderr_file}")")"
+  fi
+  rm -f "${stderr_file}"
 }
 
 # remove_label silently removes a label (no error if absent).

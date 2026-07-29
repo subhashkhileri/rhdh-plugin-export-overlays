@@ -33,12 +33,14 @@ if [[ -z "${ISSUE_URL}" ]]; then
   exit 1
 fi
 
-PROW_URL=$(gh issue view "${ISSUE_URL}" --json body --jq '.body' \
+ISSUE_BODY=$(gh issue view "${ISSUE_URL}" --json body --jq '.body')
+
+PROW_URL=$(echo "${ISSUE_BODY}" \
   | grep -oP '(?<=PROW_URL: ).*' | head -1 | tr -d '[:space:]')
 
 if [[ -z "${PROW_URL}" ]]; then
   echo "ERROR: Could not extract PROW_URL from issue body" >&2
-  gh issue view "${ISSUE_URL}" --json body --jq '.body'
+  echo "${ISSUE_BODY}"
   exit 1
 fi
 echo "Analyzing failure: ${PROW_URL}"
