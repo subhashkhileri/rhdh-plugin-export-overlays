@@ -163,8 +163,16 @@ Each subagent prompt should include:
   which skill could not be invoked — do not proceed without the skills.**
 - Instruction to skip Step 0 (artifacts already downloaded) and use
   `--project <workspace>` when running diagnostics
-- Instruction to return per-test findings: test name, root cause,
-  suggested `fix_category`, and key evidence
+- Instruction to return per-test **evidence** (not classification):
+  test name, root cause mechanism, key evidence, and these
+  classification inputs:
+  - What is unique about this test's code path compared to other tests?
+  - Did the same infrastructure component work for other tests in this
+    workspace?
+  - Could a test code change prevent this failure?
+- **Do not ask subagents to suggest a `fix_category`** — classification
+  is the triage agent's job (Phase 3) because it requires cross-workspace
+  context that subagents lack
 
 If a subagent fails or returns unusable output, analyze that workspace
 inline as a fallback.
@@ -172,8 +180,8 @@ inline as a fallback.
 From the skill's output (yours or subagents'), extract:
 - Which tests failed and their error messages
 - Which workspace each test belongs to
-- Root cause for each failure
-- Whether the failure is UI-level, config-level, or setup-level
+- Root cause mechanism for each failure
+- Classification inputs (unique code path, component reuse, preventability)
 
 ### Phase 2 completion checklist
 
@@ -201,6 +209,9 @@ deployment error) where no browser was involved and no trace exists.
 
 ## Phase 3: Classify Per Workspace
 
+Subagents return evidence, not classifications. This phase is where
+classification happens — using the evidence from all workspaces together.
+
 Classify each failure independently, then organize by workspace. For each
 workspace, assign a `fix_category`:
 
@@ -222,6 +233,16 @@ workspace, assign a `fix_category`:
 **`infra_flake` requires evidence of transience.** Check `pods.txt`,
 `events.txt`, and `backstage-backend.log` (if the pod started) to confirm
 the cause would not reproduce on every run.
+
+**Transience is necessary but not sufficient for `infra_flake`.** Apply a
+differential diagnosis: did the same infrastructure component work for
+other tests in this run? If yes, the problem is in the failing test's
+unique code path, not the infrastructure — classify as `test_fix`. If a
+test code change (timeout, waiting for the right condition, different
+pattern) would prevent the
+failure, it is `test_fix` even if the trigger was transient.
+`infra_flake` is reserved for failures where no test code change would
+help.
 
 **Within a workspace with multiple failures:**
 - If failures share a root cause (e.g., beforeAll failed, serial tests
