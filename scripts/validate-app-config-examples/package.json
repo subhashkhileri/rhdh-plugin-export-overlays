@@ -1,17 +1,17 @@
 {
-  "name": "native-smoke-tests",
+  "name": "validate-app-config-examples",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Docker-free, in-process smoke harness for RHDH dynamic backend plugins: install via the published install-dynamic-plugins CLI, then boot with startTestBackend — no container, no cluster.",
+  "description": "Validates Package metadata appConfigExamples: structural checks (RHIDP-12590) plus semantic validation against each plugin's published config schema (RHIDP-13509).",
   "engines": {
     "node": ">=24",
     "yarn": ">=4"
   },
   "packageManager": "yarn@4.12.0",
   "scripts": {
-    "build": "esbuild src/native-smoke.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/native-smoke.mjs",
-    "smoke": "yarn build && node dist/native-smoke.mjs",
+    "build": "esbuild src/validate.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/validate.mjs",
+    "validate": "yarn build && node dist/validate.mjs",
     "test": "esbuild src/*.test.ts --bundle --platform=node --format=esm --packages=external --outdir=dist-tests --out-extension:.js=.mjs && node --test \"dist-tests/*.test.mjs\"",
     "tsc:check": "tsc --noEmit",
     "check": "yarn tsc:check && yarn lint:check && yarn prettier:check && yarn test",
@@ -21,14 +21,12 @@
     "prettier:fix": "prettier --write ."
   },
   "dependencies": {
-    "@backstage/backend-plugin-api": "1.9.2",
-    "@backstage/backend-test-utils": "1.11.4",
-    "@backstage/plugin-scaffolder-backend": "3.3.0",
+    "@backstage/config-loader": "1.11.0",
+    "@backstage/types": "1.2.2",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@red-hat-developer-hub/cli-module-install-dynamic-plugins": "0.3.0",
     "@types/node": "24.13.2",
     "esbuild": "0.28.1",
     "eslint": "10.8.0",
