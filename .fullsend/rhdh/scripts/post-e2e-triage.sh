@@ -202,7 +202,6 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
       # Create issue WITHOUT labels — labels are added separately via the
       # labels API so that ready-to-code fires a proper issues.labeled event
       # (gh issue create --label does NOT emit a separate labeled event).
-      local create_stderr
       create_stderr="$(mktemp)"
       if ISSUE_URL="$(gh issue create \
         --repo "${REPO_FULL_NAME}" \
