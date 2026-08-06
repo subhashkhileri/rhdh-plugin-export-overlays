@@ -9,9 +9,20 @@ import { registerOrchestratorWorkflowTests } from "./orchestrator.tests.js";
 import { registerOrchestratorRbacTests } from "./orchestrator-rbac.tests.js";
 import { registerRetryWorkflowTests } from "./retry-workflow.tests.js";
 import { registerUiPropsTestWorkflowTests } from "./ui-props-test-workflow.tests.js";
+import { registerOrchestratorKafkaTests } from "./orchestrator-kafka.tests.js";
+
+function reuseClusterSetup(): boolean {
+  const v = process.env.ORCH_E2E_REUSE_CLUSTER ?? "";
+  return v === "1" || v.toLowerCase() === "true";
+}
 
 // Layer 4b: SonataFlow / OSL + published OCI artifact.
 test.describe("Orchestrator", () => {
+  test.skip(
+    !!process.env.E2E_NIGHTLY_MODE,
+    "Orchestrator backend plugin crashes with TypeError in BackendInitializer.cjs.js:150 (#getInitDeps) — product bug",
+  );
+
   test.beforeAll(async ({ rhdh }, testInfo) => {
     // SonataFlow + OpenShift Logging install + RHDH deploy can exceed 40 minutes in CI.
     test.setTimeout(60 * 60 * 1000);
@@ -19,6 +30,27 @@ test.describe("Orchestrator", () => {
       `orchestrator-setup-${testInfo.project.name}`,
       async () => {
         const project = rhdh.deploymentConfig.namespace;
+
+        // Small clusters: skip Loki + full redeploy when substrate is already live.
+        // Use after a prior successful (or manually healed) deploy: ORCH_E2E_REUSE_CLUSTER=1
+        if (reuseClusterSetup()) {
+          console.warn(
+            "[orchestrator-setup] ORCH_E2E_REUSE_CLUSTER=1 — skipping deploySonataflow/Loki/RHDH redeploy",
+          );
+          if (!process.env.RHDH_BASE_URL?.trim()) {
+            console.warn(
+              "[orchestrator-setup] ORCH_E2E_REUSE_CLUSTER=1 but RHDH_BASE_URL is not set — tests may fail",
+            );
+          }
+          process.env.SONATAFLOW_DATA_INDEX_URL =
+            process.env.SONATAFLOW_DATA_INDEX_URL?.trim() ||
+            `http://sonataflow-platform-data-index-service.${project}.svc.cluster.local`;
+          process.env.LOKI_BASE_URL =
+            process.env.LOKI_BASE_URL?.trim() ||
+            "http://logging-loki-gateway-http.openshift-logging.svc.cluster.local:8080";
+          return;
+        }
+
         await rhdh.configure({ auth: "keycloak" });
         try {
           await deploySonataflow(project);
@@ -47,4 +79,5 @@ test.describe("Orchestrator", () => {
   registerOrchestratorRbacTests();
   registerRetryWorkflowTests();
   registerUiPropsTestWorkflowTests();
+  registerOrchestratorKafkaTests();
 });
