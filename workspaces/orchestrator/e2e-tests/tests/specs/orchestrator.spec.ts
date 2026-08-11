@@ -17,11 +17,6 @@ function skipOrchestratorDeploy(): boolean {
 
 // Layer 4b: SonataFlow / OSL + published OCI artifact.
 test.describe("Orchestrator", () => {
-  test.skip(
-    !!process.env.E2E_NIGHTLY_MODE,
-    "Orchestrator backend plugin crashes with TypeError in BackendInitializer.cjs.js:150 (#getInitDeps) — product bug",
-  );
-
   test.beforeAll(async ({ rhdh }, testInfo) => {
     // SonataFlow + OpenShift Logging install + RHDH deploy can exceed 40 minutes in CI.
     test.setTimeout(60 * 60 * 1000);
