@@ -80,6 +80,68 @@ async function testStatus(job: string, subdir: string, id: string, query: string
   return "skipped";
 }
 
+async function getText(url: string): Promise<string | null> {
+  const res = await fetch(url);
+  return res.ok ? res.text() : null;
+}
+
+// backstage-backend container image from a `kubectl get deployments -o wide` dump: the
+// CONTAINERS and IMAGES columns are comma-separated in the same order → align by index.
+function backendImage(deployments: string): string | null {
+  for (const line of deployments.split("\n")) {
+    const tokens = line.split(/\s+/);
+    const names = tokens.find((t) => t.includes("backstage-backend"))?.split(",") ?? [];
+    const imgs = tokens.find((t) => /@sha256:/.test(t))?.split(",") ?? [];
+    const i = names.indexOf("backstage-backend");
+    if (i >= 0 && imgs[i]) return imgs[i];
+  }
+  return null;
+}
+
+type Fp = { image: string | null; catalogIndex: string | null };
+
+// Deployment fingerprint = the "shipped bits" of a build: the RHDH backend image and the
+// plugin-catalog-index image. Same across every project in a run, so the first project that
+// yields each value wins. Lets us tell an infra flake (identical bits passed then failed)
+// from a regression (bits changed between green and red).
+async function fingerprint(job: string, subdir: string, id: string): Promise<Fp> {
+  const root = `logs/${job}/${id}/artifacts/${subdir}/${CONTAINER}/artifacts/e2e-test-results/logs`;
+  const q = new URLSearchParams({ prefix: `${root}/`, delimiter: "/" });
+  const listing = await getJson(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?${q}`);
+  const projects = (listing?.prefixes ?? []).map((p: string) => p.replace(/\/$/, "").split("/").pop()!);
+  let image: string | null = null;
+  let catalogIndex: string | null = null;
+  for (const proj of projects) {
+    if (!image) image = backendImage((await getText(`${GCS}/${root}/${proj}/deployments.txt`)) ?? "");
+    if (!catalogIndex)
+      catalogIndex = (await getText(`${GCS}/${root}/${proj}/describe-pods.txt`))?.match(/CATALOG_INDEX_IMAGE:\s*(\S+)/)?.[1] ?? null;
+    if (image && catalogIndex) break;
+  }
+  return { image, catalogIndex };
+}
+
+const fmtFp = (title: string, fp: Fp) =>
+  `${title}:\n  backend image: ${fp.image ?? "?"}\n  catalog index: ${fp.catalogIndex ?? "?"}\n\n`;
+
+// Diff the current (red) build's shipped bits against the last-pass (green) build's.
+function diffFp(red: Fp, green: Fp, greenId: string): string {
+  if (!green.image && !green.catalogIndex)
+    return `Deployment: artifacts unavailable for last-pass build ${greenId} — cannot diff shipped bits.\n\n`;
+  const row = (label: string, r: string | null, g: string | null) =>
+    r === g
+      ? `  ${label}: UNCHANGED (${r ?? "?"})\n`
+      : `  ${label}: CHANGED\n    green: ${g ?? "?"}\n    red:   ${r ?? "?"}\n`;
+  const changed = red.image !== green.image || red.catalogIndex !== green.catalogIndex;
+  return (
+    `Deployment diff — last-pass build ${greenId} (green) vs current (red):\n` +
+    row("backend image", red.image, green.image) +
+    row("catalog index", red.catalogIndex, green.catalogIndex) +
+    (changed
+      ? "  → Shipped bits CHANGED between green and red → the changed image/catalog is a prime REGRESSION suspect.\n\n"
+      : "  → Shipped bits IDENTICAL → environment did not change → favors INFRA_FLAKE (rerun).\n\n")
+  );
+}
+
 const fmt = (ms: number | null) => (ms ? new Date(ms).toISOString().replace("T", " ").slice(0, 16) + "Z" : "?");
 const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "<date>");
 
@@ -123,13 +185,17 @@ async function main(): Promise<void> {
   for (const r of trail) process.stdout.write(`  ${LABEL[r.status]}  ${fmt(r.ms)}  ${r.id}${r.id === ref.jobId ? "  <-- current" : ""}\n`);
   process.stdout.write("\n");
 
+  const curFp = await fingerprint(ref.job, ref.subdir, ref.jobId);
+
   if (!lastPass) {
+    process.stdout.write(fmtFp(`Deployment (current build ${ref.jobId})`, curFp));
     process.stdout.write(`RESULT: Test did NOT pass in the last ${days} days → not a transient flake.\n  → Likely a real regression, long-standing break, or newly-added/product-bug test.\n  → Widen with --days 14, or check when it was added: git log -S '<test title>' upstream/${ref.branch} -- <spec-file>\n`);
     return;
   }
 
   const gap = currentMs && lastPass.ms ? ` (~${Math.round((currentMs - lastPass.ms) / 3_600_000)}h before the failing run)` : "";
   process.stdout.write(`RESULT: Last passed in build ${lastPass.id} on ${fmt(lastPass.ms)}${gap}\n  Artifacts (prow): ${PROW_VIEW}/${BUCKET}/logs/${ref.job}/${lastPass.id}\n\n`);
+  process.stdout.write(diffFp(curFp, await fingerprint(ref.job, ref.subdir, lastPass.id), lastPass.id));
   process.stdout.write(
     `Next: diff branch '${ref.branch}' between the two runs (branch is explicit below):\n` +
       `  git fetch upstream ${ref.branch}\n` +

@@ -98,11 +98,20 @@ prints the trail, and for the last green run prints its **date + prow artifact l
 a ready-to-run `git log --since=<lastpass> --until=<current> upstream/<branch>` command
 (the branch is derived from the job name and passed explicitly).
 
+It also prints a **deployment fingerprint diff** — the RHDH backend image and the
+plugin-catalog-index image of the green vs the red build (read from each build's
+`deployments.txt` / `describe-pods.txt` over GCS). This answers *did the shipped bits
+change?* independently of the branch commits: **IDENTICAL** shipped bits (same image +
+catalog index that passed then failed) favors **infra_flake**; **CHANGED** shipped bits
+make the changed image/catalog a prime **regression** suspect even if no repo commits
+landed (the image is built elsewhere).
+
 **Act on the result:**
-- **Passed within the window** → run the emitted `git log`. **No commits in the window**
-  = same branch HEAD passed then failed → strongly favors **infra_flake** (recommend
-  rerun). **Commits touch the failing workspace/plugin** → inspect them → possible
-  **regression** or product change; that diff is your prime suspect.
+- **Passed within the window** → run the emitted `git log` **and** read the deployment
+  diff. **No commits in the window AND shipped bits identical** = same branch HEAD, same
+  image passed then failed → strongly favors **infra_flake** (recommend rerun).
+  **Commits touch the failing workspace/plugin, or the image/catalog changed** → inspect
+  them → possible **regression** or product change; that diff is your prime suspect.
 - **Did NOT pass in the window** → not a transient flake. Favors a **real regression, a
   long-standing break, or a newly-added/product-bug test**. Widen `--days`, or check when
   the test was added (`git log -S`) and which plugin version ships on that branch.
