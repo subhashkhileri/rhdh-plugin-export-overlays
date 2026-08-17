@@ -101,20 +101,22 @@ a ready-to-run `git log --since=<lastpass> --until=<current> upstream/<branch>` 
 It also prints a **deployment fingerprint diff** — the RHDH backend image and the
 plugin-catalog-index image of the green vs the red build (read from each build's
 `deployments.txt` / `describe-pods.txt` over GCS). This answers *did the shipped bits
-change?* independently of the branch commits: **IDENTICAL** shipped bits (same image +
-catalog index that passed then failed) favors **infra_flake**; **CHANGED** shipped bits
-make the changed image/catalog a prime **regression** suspect even if no repo commits
-landed (the image is built elsewhere).
+change?* independently of the branch commits.
 
-**Act on the result:**
-- **Passed within the window** → run the emitted `git log` **and** read the deployment
-  diff. **No commits in the window AND shipped bits identical** = same branch HEAD, same
-  image passed then failed → strongly favors **infra_flake** (recommend rerun).
-  **Commits touch the failing workspace/plugin, or the image/catalog changed** → inspect
-  them → possible **regression** or product change; that diff is your prime suspect.
-- **Did NOT pass in the window** → not a transient flake. Favors a **real regression, a
-  long-standing break, or a newly-added/product-bug test**. Widen `--days`, or check when
-  the test was added (`git log -S`) and which plugin version ships on that branch.
+**The script only reports facts — it does not classify.** The same signal can have several
+causes, so treat the output as evidence that rules possibilities in or out, not a verdict.
+You (the analyst) make the call, combining it with the error-context, trace, and logs from
+the later steps:
+- **Shipped bits identical + no commits in the window** → the environment and the repo did
+  not change between green and red. This *rules out* an image/catalog regression and a
+  workspace-commit regression, and is **consistent with** an infra flake, a test flake, or
+  an intermittent product bug — it does not prove any one of them. Confirm which via the
+  trace/logs (e.g. a network error during setup vs a genuine assertion failure).
+- **Shipped bits differ, or commits touch the failing workspace/plugin** → the changed
+  image/catalog or those commits are the prime suspects; inspect that diff first.
+- **No PASS/FLAKY in the window** → the test has not been green recently. Consistent with a
+  long-standing break, a persistent product bug, or a newly-added test — widen `--days`,
+  or check when the test was added (`git log -S`) and which plugin version ships on that branch.
 
 Only PR-check URLs (no `logs/` history) are unsupported — skip this step for those.
 

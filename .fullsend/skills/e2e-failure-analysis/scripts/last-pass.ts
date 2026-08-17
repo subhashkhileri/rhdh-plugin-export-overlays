@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 // Find the most recent nightly run in which a given failed test PASSED, within a
-// look-back window — to tell a transient flake (passed recently on the same branch
-// HEAD → no code change → infra_flake) apart from a real regression (started failing
-// after specific commits → inspect the diff).
+// look-back window, and report the surrounding facts: the run-history trail, the
+// last-pass build (date + artifact link), the deployment fingerprint diff (RHDH image
+// and catalog-index, green vs red), and the branch commits between the two runs.
+//
+// This is an INFORMATION tool, not a classifier. It does not decide flake vs regression
+// vs product bug — the same signal (e.g. identical bits that passed then failed) is
+// consistent with several causes. It surfaces the evidence; the analyst classifies.
 //
 // Reads each build's Playwright results.json (structured status), not log glyphs.
 //
@@ -136,9 +140,7 @@ function diffFp(red: Fp, green: Fp, greenId: string): string {
     `Deployment diff — last-pass build ${greenId} (green) vs current (red):\n` +
     row("backend image", red.image, green.image) +
     row("catalog index", red.catalogIndex, green.catalogIndex) +
-    (changed
-      ? "  → Shipped bits CHANGED between green and red → the changed image/catalog is a prime REGRESSION suspect.\n\n"
-      : "  → Shipped bits IDENTICAL → environment did not change → favors INFRA_FLAKE (rerun).\n\n")
+    `  Shipped bits ${changed ? "DIFFER" : "are IDENTICAL"} between green and red.\n\n`
   );
 }
 
@@ -189,7 +191,7 @@ async function main(): Promise<void> {
 
   if (!lastPass) {
     process.stdout.write(fmtFp(`Deployment (current build ${ref.jobId})`, curFp));
-    process.stdout.write(`RESULT: Test did NOT pass in the last ${days} days → not a transient flake.\n  → Likely a real regression, long-standing break, or newly-added/product-bug test.\n  → Widen with --days 14, or check when it was added: git log -S '<test title>' upstream/${ref.branch} -- <spec-file>\n`);
+    process.stdout.write(`RESULT: No PASS or FLAKY build found for this test in the last ${days} days.\n  To dig further: widen with --days 14, or find when the test was added: git log -S '<test title>' upstream/${ref.branch} -- <spec-file>\n`);
     return;
   }
 
@@ -197,14 +199,11 @@ async function main(): Promise<void> {
   process.stdout.write(`RESULT: Last passed in build ${lastPass.id} on ${fmt(lastPass.ms)}${gap}\n  Artifacts (prow): ${PROW_VIEW}/${BUCKET}/logs/${ref.job}/${lastPass.id}\n\n`);
   process.stdout.write(diffFp(curFp, await fingerprint(ref.job, ref.subdir, lastPass.id), lastPass.id));
   process.stdout.write(
-    `Next: diff branch '${ref.branch}' between the two runs (branch is explicit below):\n` +
+    `Commits on '${ref.branch}' between the two runs (branch passed explicitly):\n` +
       `  git fetch upstream ${ref.branch}\n` +
       `  git log --oneline --since="${iso(lastPass.ms)}" --until="${iso(currentMs)}" upstream/${ref.branch}\n` +
       `  # scoped to the failing workspace:\n` +
-      `  git log --oneline --since="${iso(lastPass.ms)}" --until="${iso(currentMs)}" upstream/${ref.branch} -- workspaces/<workspace>/\n\n` +
-      "Interpretation:\n" +
-      `  - No commits in the window  → same '${ref.branch}' HEAD passed then failed → lean INFRA_FLAKE (rerun).\n` +
-      `  - Commits touch the workspace/plugin → inspect them → possible REGRESSION / product change.\n`,
+      `  git log --oneline --since="${iso(lastPass.ms)}" --until="${iso(currentMs)}" upstream/${ref.branch} -- workspaces/<workspace>/\n`,
   );
 }
 
