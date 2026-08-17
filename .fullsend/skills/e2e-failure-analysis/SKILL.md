@@ -72,6 +72,43 @@ check `backstage-backend.log` if the pod started — it reveals the internal mec
 (DB refused, plugin crash, config error). If the pod never started, the backend log
 won't exist — classify from build-log.txt and events.txt instead.
 
+### Step 1.5: Last-Pass Comparison (nightly/periodic URLs only)
+
+**Run this for every failed spec on a nightly/periodic (`logs/…`) URL, before deep-diving.**
+It answers the single most decisive classification question: *did this exact test pass
+recently, and did any code change between then and now?* A flake and a regression look
+identical in a single run's artifacts — only the history tells them apart.
+
+```bash
+SKILL_DIR="${SKILL_DIR:-.claude/skills/e2e-failure-analysis}"
+node --experimental-strip-types "$SKILL_DIR/scripts/last-pass.ts" \
+  "<PROW_OR_GCSWEB_URL>" "<project-name>" "<slice of test title>" [--days 7]
+```
+
+Pass the failing test's **project name** (the `[bracketed]` name from Step 1) plus a
+distinctive **substring of the test title** as separate quoted args — ALL must match
+against `"<projectName> <specFile> <specTitle>"` (e.g. `"rbac-default-permissions" "User
+should got default permissions"`). Default look-back is 7 days; widen with `--days 14`.
+
+The script reads each build's Playwright **`results.json`** (structured `test.status`, not
+log glyphs), so verdicts are exact: `PASS` (expected), `FAIL` (unexpected), `FLAKY`
+(failed then passed on retry — counts as green for last-pass), `skip`, `absent` (test not
+found — renamed/query too loose), `no-log` (results.json missing). It scans newest→oldest,
+prints the trail, and for the last green run prints its **date + prow artifact link** plus
+a ready-to-run `git log --since=<lastpass> --until=<current> upstream/<branch>` command
+(the branch is derived from the job name and passed explicitly).
+
+**Act on the result:**
+- **Passed within the window** → run the emitted `git log`. **No commits in the window**
+  = same branch HEAD passed then failed → strongly favors **infra_flake** (recommend
+  rerun). **Commits touch the failing workspace/plugin** → inspect them → possible
+  **regression** or product change; that diff is your prime suspect.
+- **Did NOT pass in the window** → not a transient flake. Favors a **real regression, a
+  long-standing break, or a newly-added/product-bug test**. Widen `--days`, or check when
+  the test was added (`git log -S`) and which plugin version ships on that branch.
+
+Only PR-check URLs (no `logs/` history) are unsupported — skip this step for those.
+
 ### Step 2: Read error-context.md for Failed Tests
 
 **This is the PRIMARY artifact for understanding UI failures.** Each failed test has an
