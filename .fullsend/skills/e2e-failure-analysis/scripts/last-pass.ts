@@ -50,20 +50,21 @@ async function getJson(url: string): Promise<any | null> {
   return res.ok ? res.json() : null;
 }
 
+// GCS JSON list API — pass params, get back { prefixes, items, nextPageToken }.
+const listObjects = (params: Record<string, string>) =>
+  getJson(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?${new URLSearchParams(params)}`);
+
+// Leaf name of a GCS prefix, e.g. "logs/job/123/" -> "123".
+const leaf = (prefix: string) => prefix.replace(/\/$/, "").split("/").pop()!;
+
 // Under artifacts/<subdir>/ sit one or more step dirs (the test container + gather steps).
 // Pick the one that actually holds the Playwright report, so the container name is discovered
 // rather than hardcoded — resolved once from the current build and reused for the whole run.
 async function resolveContainer(job: string, subdir: string, id: string): Promise<string | null> {
-  const base = `logs/${job}/${id}/artifacts/${subdir}`;
-  const q = new URLSearchParams({ prefix: `${base}/`, delimiter: "/" });
-  const listing = await getJson(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?${q}`);
+  const listing = await listObjects({ prefix: `logs/${job}/${id}/artifacts/${subdir}/`, delimiter: "/" });
   for (const p of listing?.prefixes ?? []) {
-    const name = p.replace(/\/$/, "").split("/").pop()!;
-    const probe = await getJson(
-      `https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?` +
-        new URLSearchParams({ prefix: `${p}artifacts/playwright-report/`, delimiter: "/", maxResults: "1" }),
-    );
-    if ((probe?.items?.length ?? 0) > 0 || (probe?.prefixes?.length ?? 0) > 0) return name;
+    const probe = await listObjects({ prefix: `${p}artifacts/playwright-report/`, delimiter: "/", maxResults: "1" });
+    if (probe?.items?.length || probe?.prefixes?.length) return leaf(p);
   }
   return null;
 }
@@ -72,10 +73,10 @@ async function listBuilds(job: string): Promise<string[]> {
   const ids: string[] = [];
   let token: string | undefined;
   do {
-    const q = new URLSearchParams({ prefix: `logs/${job}/`, delimiter: "/", maxResults: "1000" });
-    if (token) q.set("pageToken", token);
-    const data = await getJson(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?${q}`);
-    for (const p of data?.prefixes ?? []) ids.push(p.replace(/\/$/, "").split("/").pop()!);
+    const params: Record<string, string> = { prefix: `logs/${job}/`, delimiter: "/", maxResults: "1000" };
+    if (token) params.pageToken = token;
+    const data = await listObjects(params);
+    for (const p of data?.prefixes ?? []) ids.push(leaf(p));
     token = data?.nextPageToken;
   } while (token);
   return ids.filter((b) => /^\d+$/.test(b)).sort((a, b) => (BigInt(a) < BigInt(b) ? 1 : -1));
@@ -130,9 +131,8 @@ type Fp = { image: string | null; catalogIndex: string | null };
 // yields each value wins.
 async function fingerprint(job: string, subdir: string, id: string): Promise<Fp> {
   const root = `logs/${job}/${id}/artifacts/${subdir}/${CONTAINER}/artifacts/e2e-test-results/logs`;
-  const q = new URLSearchParams({ prefix: `${root}/`, delimiter: "/" });
-  const listing = await getJson(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?${q}`);
-  const projects = (listing?.prefixes ?? []).map((p: string) => p.replace(/\/$/, "").split("/").pop()!);
+  const listing = await listObjects({ prefix: `${root}/`, delimiter: "/" });
+  const projects = (listing?.prefixes ?? []).map(leaf);
   let image: string | null = null;
   let catalogIndex: string | null = null;
   for (const proj of projects) {
@@ -170,15 +170,17 @@ const iso = (ms: number | null) => (ms ? new Date(ms).toISOString() : "<date>");
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const di = argv.indexOf("--days");
-  const days = di >= 0 ? Number(argv[di + 1]) : 7;
-  const [url, ...query] = argv.filter((a, i) => a !== "--days" && !(di >= 0 && i === di + 1));
+  const daysArg = di >= 0 ? argv[di + 1] : undefined;
+  const days = di >= 0 ? Number(daysArg) : 7;
+  if (di >= 0) argv.splice(di, 2);
+  const [url, ...query] = argv;
 
   if (!url || !query.length) {
     process.stderr.write('Usage: last-pass.ts <PROW_URL> <query...> [--days N]\n  e.g. <url> "rbac-default-permissions" "User should got default permissions"\n');
     process.exit(1);
   }
   if (!Number.isFinite(days) || days <= 0) {
-    process.stderr.write(`ERROR: --days needs a positive number (got ${JSON.stringify(argv[di + 1])})\n`);
+    process.stderr.write(`ERROR: --days needs a positive number (got ${JSON.stringify(daysArg)})\n`);
     process.exit(1);
   }
   const ref = parseUrl(url);
@@ -209,7 +211,7 @@ async function main(): Promise<void> {
 
   for (const id of await listBuilds(ref.job)) {
     if (BigInt(id) > BigInt(ref.jobId)) continue; // ignore runs newer than the one under analysis
-    const ms = await startedMs(ref.job, id);
+    const ms = id === ref.jobId ? currentMs : await startedMs(ref.job, id); // reuse already-fetched current build ts
     if (ms !== null && ms < cutoff && id !== ref.jobId) break; // outside window
     const status = await testStatus(ref.job, ref.subdir, id, query);
     trail.push({ id, ms, status });
