@@ -136,8 +136,16 @@ async function main(): Promise<void> {
   const cacheDir = path.join(base, info.pr || "nightly", info.job_id);
   const container = "redhat-developer-rhdh-plugin-export-overlays-ocp-helm";
   const artifactsDir = path.join(cacheDir, container, "artifacts");
+  const marker = path.join(cacheDir, ".download-complete");
 
-  await fs.rm(cacheDir, { recursive: true, force: true });
+  // Artifacts for a build ID are immutable, so a completed download is reusable. The
+  // marker also makes concurrent runs for the same build safe: the first to finish writes
+  // it and the rest hit the cache, instead of one run clearing files another is reading.
+  if (await fs.stat(marker).catch(() => null)) {
+    process.stderr.write("Cache hit — artifacts already downloaded.\n");
+    process.stdout.write(artifactsDir + "\n");
+    return;
+  }
 
   const gcsSrc = `${info.gcs}/artifacts/${info.subdir}/${container}`;
 
@@ -157,6 +165,9 @@ async function main(): Promise<void> {
     process.stderr.write(`ERROR: Artifacts dir not found: ${artifactsDir}\n`);
     process.exit(1);
   }
+
+  // Only mark complete when every file arrived — a partial download must not be cached.
+  if (failed === 0) await fs.writeFile(marker, "");
 
   process.stderr.write("Download complete.\n");
   process.stdout.write(artifactsDir + "\n");
