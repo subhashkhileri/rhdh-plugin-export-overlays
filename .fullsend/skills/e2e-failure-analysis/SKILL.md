@@ -93,10 +93,13 @@ catalog-index, green vs red), and a ready-to-run `git log … upstream/<branch>`
 commits between the two runs. The last-pass build's link is there for a quick comparison
 against the failing run when one helps.
 
-**It reports facts, not a classification.** Identical shipped bits + no commits rules out an
-image/catalog or workspace regression, but is equally consistent with an infra flake, a test
-flake, or an intermittent product bug — confirm which via the error-context/trace/logs. Skip
-for PR-check URLs (no `logs/` history).
+**It reports facts, not a classification.** An identical backend image + catalog-index means
+those two didn't change between green and red — but the script does **not** diff plugin OCI
+tags, the Helm chart version, or the catalog `locations:` URLs (many pinned to a mutable
+`main`), so a regression can still hide there; check those before ruling one out. And even with
+everything identical, the failure is equally consistent with an infra flake, a test flake, or an
+intermittent product bug — confirm which via the error-context/trace/logs. Skip for PR-check
+URLs (no `logs/` history).
 
 ### Step 2: Read error-context.md for Failed Tests
 

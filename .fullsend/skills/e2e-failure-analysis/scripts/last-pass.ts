@@ -21,8 +21,11 @@
 
 const BUCKET = "test-platform-results";
 const GCS = `https://storage.googleapis.com/${BUCKET}`;
-const CONTAINER = "redhat-developer-rhdh-plugin-export-overlays-ocp-helm";
 const PROW_VIEW = "https://prow.ci.openshift.org/view/gs";
+
+// The CI step's container dir (e.g. "…-ocp-helm") is resolved from the current build's
+// artifact layout — not hardcoded — so operator installs and renamed steps still work.
+let CONTAINER = "";
 
 type Status = "pass" | "fail" | "flaky" | "skipped" | "absent" | "nolog";
 const MAP: Record<string, Status> = { expected: "pass", unexpected: "fail", flaky: "flaky", skipped: "skipped" };
@@ -45,6 +48,24 @@ function parseUrl(url: string) {
 async function getJson(url: string): Promise<any | null> {
   const res = await fetch(url);
   return res.ok ? res.json() : null;
+}
+
+// Under artifacts/<subdir>/ sit one or more step dirs (the test container + gather steps).
+// Pick the one that actually holds the Playwright report, so the container name is discovered
+// rather than hardcoded — resolved once from the current build and reused for the whole run.
+async function resolveContainer(job: string, subdir: string, id: string): Promise<string | null> {
+  const base = `logs/${job}/${id}/artifacts/${subdir}`;
+  const q = new URLSearchParams({ prefix: `${base}/`, delimiter: "/" });
+  const listing = await getJson(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?${q}`);
+  for (const p of listing?.prefixes ?? []) {
+    const name = p.replace(/\/$/, "").split("/").pop()!;
+    const probe = await getJson(
+      `https://storage.googleapis.com/storage/v1/b/${BUCKET}/o?` +
+        new URLSearchParams({ prefix: `${p}artifacts/playwright-report/`, delimiter: "/", maxResults: "1" }),
+    );
+    if ((probe?.items?.length ?? 0) > 0 || (probe?.prefixes?.length ?? 0) > 0) return name;
+  }
+  return null;
 }
 
 async function listBuilds(job: string): Promise<string[]> {
@@ -106,8 +127,7 @@ type Fp = { image: string | null; catalogIndex: string | null };
 
 // Deployment fingerprint = the "shipped bits" of a build: the RHDH backend image and the
 // plugin-catalog-index image. Same across every project in a run, so the first project that
-// yields each value wins. Lets us tell an infra flake (identical bits passed then failed)
-// from a regression (bits changed between green and red).
+// yields each value wins.
 async function fingerprint(job: string, subdir: string, id: string): Promise<Fp> {
   const root = `logs/${job}/${id}/artifacts/${subdir}/${CONTAINER}/artifacts/e2e-test-results/logs`;
   const q = new URLSearchParams({ prefix: `${root}/`, delimiter: "/" });
@@ -157,6 +177,10 @@ async function main(): Promise<void> {
     process.stderr.write('Usage: last-pass.ts <PROW_URL> <query...> [--days N]\n  e.g. <url> "rbac-default-permissions" "User should got default permissions"\n');
     process.exit(1);
   }
+  if (!Number.isFinite(days) || days <= 0) {
+    process.stderr.write(`ERROR: --days needs a positive number (got ${JSON.stringify(argv[di + 1])})\n`);
+    process.exit(1);
+  }
   const ref = parseUrl(url);
   if (!ref) {
     process.stderr.write(`ERROR: Not a periodic/nightly (logs/) URL — history unavailable: ${url}\n`);
@@ -165,6 +189,18 @@ async function main(): Promise<void> {
 
   process.stderr.write(`Job:    ${ref.job}\nBranch: ${ref.branch}\nQuery:  ${query.map((q) => `"${q}"`).join(" ")}\n\n`);
 
+  // Discover the artifacts container from the current build before reading any per-build data.
+  const resolved = await resolveContainer(ref.job, ref.subdir, ref.jobId);
+  if (!resolved) {
+    process.stderr.write(
+      `ERROR: No test-artifacts container found under\n` +
+        `  ${GCS}/logs/${ref.job}/${ref.jobId}/artifacts/${ref.subdir}/\n` +
+        `  The CI step name may have changed, or this build has no artifacts. Open the URL above to check.\n`,
+    );
+    process.exit(1);
+  }
+  CONTAINER = resolved;
+
   const currentMs = await startedMs(ref.job, ref.jobId);
   const cutoff = (currentMs ?? Date.now()) - days * 86_400_000;
 
@@ -172,6 +208,7 @@ async function main(): Promise<void> {
   let lastPass: { id: string; ms: number | null } | null = null;
 
   for (const id of await listBuilds(ref.job)) {
+    if (BigInt(id) > BigInt(ref.jobId)) continue; // ignore runs newer than the one under analysis
     const ms = await startedMs(ref.job, id);
     if (ms !== null && ms < cutoff && id !== ref.jobId) break; // outside window
     const status = await testStatus(ref.job, ref.subdir, id, query);
@@ -199,11 +236,9 @@ async function main(): Promise<void> {
   process.stdout.write(`RESULT: Last passed in build ${lastPass.id} on ${fmt(lastPass.ms)}${gap}\n  Artifacts (prow): ${PROW_VIEW}/${BUCKET}/logs/${ref.job}/${lastPass.id}\n\n`);
   process.stdout.write(diffFp(curFp, await fingerprint(ref.job, ref.subdir, lastPass.id), lastPass.id));
   process.stdout.write(
-    `Commits on '${ref.branch}' between the two runs (branch passed explicitly):\n` +
+    `Commits on '${ref.branch}' between the two runs:\n` +
       `  git fetch upstream ${ref.branch}\n` +
-      `  git log --oneline --since="${iso(lastPass.ms)}" --until="${iso(currentMs)}" upstream/${ref.branch}\n` +
-      `  # scoped to the failing workspace:\n` +
-      `  git log --oneline --since="${iso(lastPass.ms)}" --until="${iso(currentMs)}" upstream/${ref.branch} -- workspaces/<workspace>/\n`,
+      `  git log --oneline --since="${iso(lastPass.ms)}" --until="${iso(currentMs)}" upstream/${ref.branch}\n`,
   );
 }
 
