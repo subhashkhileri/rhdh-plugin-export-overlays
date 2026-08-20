@@ -181,12 +181,27 @@ async function main(): Promise<void> {
 
   await fs.writeFile(path.join(stageDir, ".download-complete"), "");
 
-  // Publish atomically. If a concurrent run already published, keep theirs and drop ours.
+  // Publish atomically. rename throws ENOTEMPTY/EEXIST when cacheDir already exists.
   try {
     await fs.rename(stageDir, cacheDir);
   } catch (e: any) {
-    await fs.rm(stageDir, { recursive: true, force: true });
-    if (e.code !== "ENOTEMPTY" && e.code !== "EEXIST") throw e;
+    if (e.code !== "ENOTEMPTY" && e.code !== "EEXIST") {
+      await fs.rm(stageDir, { recursive: true, force: true });
+      throw e;
+    }
+    if (await fs.stat(marker).catch(() => null)) {
+      // A concurrent run already published a complete copy — reuse it, drop ours.
+      await fs.rm(stageDir, { recursive: true, force: true });
+    } else {
+      // cacheDir exists but has no marker → stale leftover from an interrupted or older
+      // run (the current code only ever creates cacheDir via this rename, marker included).
+      // Replace it with our complete copy; tolerate another run publishing in the gap.
+      await fs.rm(cacheDir, { recursive: true, force: true });
+      await fs.rename(stageDir, cacheDir).catch(async (e2: any) => {
+        await fs.rm(stageDir, { recursive: true, force: true });
+        if (e2.code !== "ENOTEMPTY" && e2.code !== "EEXIST") throw e2;
+      });
+    }
   }
 
   process.stderr.write("Download complete.\n");
