@@ -138,14 +138,20 @@ async function main(): Promise<void> {
   const artifactsDir = path.join(cacheDir, container, "artifacts");
   const marker = path.join(cacheDir, ".download-complete");
 
-  // Artifacts for a build ID are immutable, so a completed download is reusable. The
-  // marker also makes concurrent runs for the same build safe: the first to finish writes
-  // it and the rest hit the cache, instead of one run clearing files another is reading.
+  // Cache hit — artifacts for a build ID are immutable, so a completed download is reusable.
   if (await fs.stat(marker).catch(() => null)) {
     process.stderr.write("Cache hit — artifacts already downloaded.\n");
     process.stdout.write(artifactsDir + "\n");
     return;
   }
+
+  // Download into a private staging dir, then publish it with a single atomic rename.
+  // Concurrent runs for the same build each stage their own copy; the first to finish
+  // publishes it and the rest reuse it — so a reader never sees a half-written cache dir,
+  // and no run clears files another is reading.
+  const stageDir = `${cacheDir}.tmp.${process.pid}`;
+  const stagedArtifacts = path.join(stageDir, container, "artifacts");
+  await fs.rm(stageDir, { recursive: true, force: true });
 
   const gcsSrc = `${info.gcs}/artifacts/${info.subdir}/${container}`;
 
@@ -156,18 +162,32 @@ async function main(): Promise<void> {
   process.stderr.write(`Downloading ${keep.length}/${allItems.length} files (${totalMb.toFixed(1)} MB)...\n`);
 
   const prefixLen = gcsSrc.length + 1;
-  const failed = await runPool(keep, (item) => downloadFile(item, prefixLen, cacheDir + "/" + container));
+  const failed = await runPool(keep, (item) => downloadFile(item, prefixLen, path.join(stageDir, container)));
 
   process.stderr.write(`Done: ${keep.length - failed}/${keep.length} files.\n`);
-  await decompressGzipped(cacheDir);
+  await decompressGzipped(stageDir);
 
-  if (!(await fs.stat(artifactsDir).catch(() => null))) {
-    process.stderr.write(`ERROR: Artifacts dir not found: ${artifactsDir}\n`);
+  if (!(await fs.stat(stagedArtifacts).catch(() => null))) {
+    process.stderr.write(`ERROR: Artifacts dir not found: ${stagedArtifacts}\n`);
     process.exit(1);
   }
 
-  // Only mark complete when every file arrived — a partial download must not be cached.
-  if (failed === 0) await fs.writeFile(marker, "");
+  // A partial download must not enter the shared cache — use it for this run only.
+  if (failed > 0) {
+    process.stderr.write(`WARNING: ${failed} file(s) failed — not caching this download.\n`);
+    process.stdout.write(stagedArtifacts + "\n");
+    return;
+  }
+
+  await fs.writeFile(path.join(stageDir, ".download-complete"), "");
+
+  // Publish atomically. If a concurrent run already published, keep theirs and drop ours.
+  try {
+    await fs.rename(stageDir, cacheDir);
+  } catch (e: any) {
+    await fs.rm(stageDir, { recursive: true, force: true });
+    if (e.code !== "ENOTEMPTY" && e.code !== "EEXIST") throw e;
+  }
 
   process.stderr.write("Download complete.\n");
   process.stdout.write(artifactsDir + "\n");
