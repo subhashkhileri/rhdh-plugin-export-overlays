@@ -35,7 +35,14 @@ on:
   issue_comment:
     types: [created]
   pull_request_target:
-    types: [opened, synchronize, ready_for_review, closed]
+    # [labeled, unlabeled] added by hand to enable the ci-diagnose agent, which
+    # is triggered by a `ci-diagnose` label on the PR (see .github/workflows/
+    # ci-diagnose-agent.yaml and .fullsend/rhdh/harness/ci-diagnose.yaml). This
+    # matches the CURRENT upstream shim template, but `fullsend repos install`
+    # only rewrites the `uses:` @ref on already-enrolled repos — it does not
+    # re-render the on:-block — so this line must be maintained by hand until
+    # the upgrade path propagates on:-block changes.
+    types: [opened, synchronize, ready_for_review, closed, labeled, unlabeled]
   pull_request_review:
     types: [submitted]
 

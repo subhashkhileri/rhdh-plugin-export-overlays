@@ -1,0 +1,220 @@
+# CI Diagnose Agent — bootstrap workflow.
+#
+# FullSend can only trigger on issue / PR / comment / label events — never on
+# CI-completion events (check_suite / status / workflow_run are hard-rejected
+# in ghaevent.go; see ADR 0033). This workflow is the bridge: it reacts to CI
+# completion, decides whether diagnose is warranted, and applies a `ci-diagnose`
+# label to the PR. The label event then routes through fullsend.yaml to the
+# ci-diagnose agent (.fullsend/rhdh/harness/ci-diagnose.yaml).
+#
+# Flow:
+#   check_suite/status completes  →  this workflow
+#     ├─ resolve the PR for the event's commit
+#     ├─ skip if the commit is no longer the PR head (stale checks)
+#     ├─ compute the RED curated checks from the PR's live rollup
+#     ├─ dedup against the sticky comment's <!-- ci-diagnose-state --> marker
+#     └─ if state changed: cycle the `ci-diagnose` label (remove → add)
+#                                          ↓
+#              fullsend.yaml (pull_request_target: [labeled]) → dispatch
+#                                          ↓
+#              CEL trigger matches → ci-diagnose agent runs (read-only)
+#                                          ↓
+#              post-ci-diagnose.sh upserts ONE sticky diagnostic comment
+#
+# Why cycle the label (remove → add) instead of just adding it: the label may
+# already be present from a prior check completing. Re-adding an existing label
+# is a no-op that fires NO webhook, so the agent would never re-run as more
+# checks go red. Removing then re-adding guarantees a fresh `labeled` event.
+#
+# Why a GitHub App token (not GITHUB_TOKEN): writes made with GITHUB_TOKEN do
+# NOT emit webhook events (GitHub anti-recursion, ADR 0033), so a GITHUB_TOKEN
+# label would never reach fullsend.yaml. The App installation token does.
+#
+# The curated check set and the RED jq filter MUST stay byte-for-byte in sync
+# with .fullsend/rhdh/agents/ci-diagnose.md Phase 1 — the state marker the agent
+# writes is compared here to decide whether to re-fire.
+name: CI Diagnose Agent
+
+on:
+  # GitHub Actions checks (E2E Code Quality, appConfigExamples coverage,
+  # Python unit tests, smoke) surface as CheckRuns in a check_suite.
+  check_suite:
+    types: [completed]
+  # OpenShift CI / Prow (ci/prow/*) and comment-commands (publish, smoketest)
+  # surface as commit statuses. `status` has no type filter — every status
+  # update fires this workflow; the job filters down to curated red checks and
+  # exits fast otherwise.
+  status: {}
+  # Manual re-diagnose for a specific PR.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to (re-)diagnose"
+        required: true
+        type: string
+
+# Collapse a burst of check completions for the same commit into one trigger.
+# cancel-in-progress is safe: every run recomputes the FULL live rollup, so the
+# latest run always has the most complete picture of what is red.
+concurrency:
+  group: >-
+    ci-diagnose-bootstrap-${{
+      github.event.check_suite.head_sha
+      || github.event.sha
+      || format('dispatch-{0}', github.event.inputs.pr_number)
+    }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: read
+  checks: read
+
+jobs:
+  label:
+    name: Evaluate CI state and label
+    runs-on: ubuntu-latest
+    # Only react to failing statuses (Prow / publish / smoketest report as
+    # commit statuses). pending/success statuses are skipped to avoid a runner
+    # spin-up per green status repo-wide — a green transition is instead picked
+    # up by check_suite:completed (which fires per commit on pass OR fail and
+    # re-reads the FULL live rollup, Prow included). check_suite and
+    # workflow_dispatch always run.
+    if: >-
+      github.event_name != 'status'
+      || github.event.state == 'failure'
+      || github.event.state == 'error'
+    steps:
+      - name: Resolve PR, compute red set, and decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          STATUS_SHA: ${{ github.event.sha }}
+          CHECK_SUITE_SHA: ${{ github.event.check_suite.head_sha }}
+          INPUT_PR: ${{ github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          # -- Resolve the commit SHA and the PR it belongs to ---------------
+          case "${EVENT_NAME}" in
+            status)       EVENT_SHA="${STATUS_SHA}" ;;
+            check_suite)  EVENT_SHA="${CHECK_SUITE_SHA}" ;;
+            workflow_dispatch) EVENT_SHA="" ;;
+            *) echo "::notice::Unhandled event ${EVENT_NAME}"; echo "fire=false" >> "${GITHUB_OUTPUT}"; exit 0 ;;
+          esac
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            PR_NUMBER="${INPUT_PR}"
+          else
+            # Map the commit → its open PR in this repo.
+            PR_NUMBER=$(gh api "repos/${REPO}/commits/${EVENT_SHA}/pulls" \
+              --jq '[.[] | select(.state=="open") | .number] | first // empty' 2>/dev/null || true)
+          fi
+
+          if [[ -z "${PR_NUMBER:-}" ]]; then
+            echo "::notice::No open PR for ${EVENT_SHA:-dispatch} — nothing to diagnose"
+            echo "fire=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "Resolved PR #${PR_NUMBER}"
+
+          # -- Read the PR's LIVE rollup (never trust the trigger payload) ----
+          ROLLUP=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" \
+            --json headRefOid,statusCheckRollup)
+          HEAD_SHA=$(echo "${ROLLUP}" | jq -r '.headRefOid')
+
+          # Skip stale checks: the completed check is for a commit that is no
+          # longer the PR head (a newer commit was pushed). Its own checks will
+          # fire their own events. Dispatch has no EVENT_SHA — never stale.
+          if [[ -n "${EVENT_SHA}" && "${EVENT_SHA}" != "${HEAD_SHA}" ]]; then
+            echo "::notice::Event SHA ${EVENT_SHA} != head ${HEAD_SHA} — stale, skipping"
+            echo "fire=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # -- Compute the sorted RED curated check names --------------------
+          # MUST match ci-diagnose.md Phase 1's filter exactly.
+          RED_NAMES=$(echo "${ROLLUP}" | jq -c '
+            .statusCheckRollup
+            | map(select(
+                ((.__typename=="StatusContext") and (.context|startswith("ci/prow/")) and (.state|IN("FAILURE","ERROR")))
+                or ((.__typename=="StatusContext") and (.context|IN("publish","smoketest")) and (.state|IN("FAILURE","ERROR")))
+                or ((.__typename=="CheckRun") and (.name|IN("E2E Code Quality","appConfigExamples coverage","Python unit tests","smoke")) and (.conclusion|IN("FAILURE","TIMED_OUT","ACTION_REQUIRED")))
+              ))
+            | map(.name // .context)
+            | sort')
+          echo "Red curated checks: ${RED_NAMES}"
+
+          NEW_STATE=$(jq -cn --arg sha "${HEAD_SHA}" --argjson red "${RED_NAMES}" \
+            '{sha:$sha, red:$red}' | jq -cS .)
+
+          # -- Read the previous state marker from the sticky comment --------
+          PREV_BODY=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '[.[] | select(.body | contains("<!-- ci-diagnose -->"))] | last | .body // ""' 2>/dev/null || true)
+          PREV_STATE=""
+          if [[ -n "${PREV_BODY}" ]]; then
+            PREV_RAW=$(printf '%s' "${PREV_BODY}" \
+              | grep -oE '<!-- ci-diagnose-state: .* -->' | head -1 \
+              | sed -E 's/^<!-- ci-diagnose-state: (.*) -->$/\1/' || true)
+            if [[ -n "${PREV_RAW}" ]]; then
+              PREV_STATE=$(printf '%s' "${PREV_RAW}" | jq -cS . 2>/dev/null || echo "")
+            fi
+          fi
+
+          # -- Decide whether to (re-)fire ----------------------------------
+          if [[ "${RED_NAMES}" == "[]" && -z "${PREV_STATE}" ]]; then
+            echo "::notice::PR is green and never diagnosed — nothing to do"
+            echo "fire=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [[ "${NEW_STATE}" == "${PREV_STATE}" ]]; then
+            echo "::notice::CI state unchanged since last diagnose — skipping"
+            echo "fire=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "State changed — will trigger diagnose"
+          echo "  prev: ${PREV_STATE:-<none>}"
+          echo "  new:  ${NEW_STATE}"
+          echo "fire=true" >> "${GITHUB_OUTPUT}"
+          echo "pr_number=${PR_NUMBER}" >> "${GITHUB_OUTPUT}"
+
+      # App installation token so the `labeled` event actually fires (a
+      # GITHUB_TOKEN label would be silently swallowed — ADR 0033).
+      - name: Generate GitHub App token
+        if: steps.decide.outputs.fire == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.RHDH_GITHUB_APP_ID }}
+          private-key: ${{ secrets.RHDH_GITHUB_APP_PRIVATE_KEY }}
+          permission-issues: write
+
+      - name: Cycle the ci-diagnose label
+        if: steps.decide.outputs.fire == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.decide.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          # Ensure the label exists (labels live on the issues API; a PR is an
+          # issue for labeling purposes).
+          gh label create "ci-diagnose" --repo "${REPO}" \
+            --description "Triggers the fullsend ci-diagnose agent" --color "1d76db" \
+            --force 2>/dev/null || true
+
+          # Remove first (ignore 404 if absent), then re-add so a fresh
+          # `labeled` webhook always fires — even if the label was already set.
+          ENCODED=$(printf '%s' "ci-diagnose" | jq -sRr @uri)
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/labels/${ENCODED}" \
+            -X DELETE --silent 2>/dev/null || true
+          sleep 1
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" \
+            -f "labels[]=ci-diagnose" --silent
+
+          echo "Cycled ci-diagnose label on PR #${PR_NUMBER} — agent will run"
