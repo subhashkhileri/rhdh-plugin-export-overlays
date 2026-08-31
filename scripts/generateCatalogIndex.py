@@ -31,16 +31,11 @@ from plugin_utils import (
     log_warn,
     log_error,
     set_debug,
-    load_and_resolve_to_stems,
 )
 
 # Global registry config
 REGISTRY_BASE = ""
-
-
-def is_registry_rarc() -> bool:
-    """Check if the registry is registry.access.redhat.com (downstream GA registry)"""
-    return REGISTRY_BASE.startswith("registry.access.redhat.com")
+ALL_YAML_FILENAME = "all.yaml"
 
 
 def get_image_name_from_package_yaml(yaml_path: Path) -> str | None:
@@ -60,6 +55,26 @@ def get_image_name_from_package_yaml(yaml_path: Path) -> str | None:
         return data.get('metadata', {}).get('name', yaml_path.stem)
     except Exception:
         return yaml_path.stem
+
+
+def build_packages_dir_image_index(packages_dir: Path) -> dict[str, Path]:
+    """Map each package YAML file's content-derived image name to its path."""
+    index: dict[str, Path] = {}
+    if not packages_dir.exists():
+        return index
+    for f in packages_dir.glob("*.yaml"):
+        if f.name == ALL_YAML_FILENAME:
+            continue
+        name = get_image_name_from_package_yaml(f)
+        if name:
+            index[name] = f
+    return index
+
+
+def is_registry_rarc() -> bool:
+    """Check if REGISTRY_BASE is registry.access.redhat.com. Used to determine if queries should be routed through quay.io for unauthenticated access."""
+    return REGISTRY_BASE.startswith("registry.access.redhat.com")
+
 
 
 def get_query_registry_reference(registry_reference: str) -> str:
@@ -86,6 +101,31 @@ def get_ghcr_token(repository: str) -> str | None:
 
 
 def parse_image_reference(registry_reference: str) -> tuple[str, str, str]:
+    """Split a container image reference into its name, tag, and digest components.
+
+    Handles all combinations of tag and digest presence, including references
+    with both (tag + digest), tag only, digest only, or empty string input.
+    Tag separators vary by registry: ghcr.io uses ``bs_{bsver}__{pluginver}``
+    while quay.io/rhdh uses ``{rhdhver}--{pluginver}``.
+
+    Args:
+        registry_reference: A container image reference string, e.g.
+            ``"quay.io/rhdh/plugin:1.11--1.5.4@sha256:abc123"``.
+
+    Returns:
+        A 3-tuple of ``(image_name, tag, digest)`` where any component may
+        be an empty string if not present in the input.
+
+    Examples:
+        >>> parse_image_reference("quay.io/rhdh/plugin:1.11--1.5.4@sha256:abc123")
+        ('quay.io/rhdh/plugin', '1.11--1.5.4', 'sha256:abc123')
+        >>> parse_image_reference("quay.io/rhdh/plugin:1.11--1.5.4")
+        ('quay.io/rhdh/plugin', '1.11--1.5.4', '')
+        >>> parse_image_reference("quay.io/rhdh/plugin@sha256:abc123")
+        ('quay.io/rhdh/plugin', '', 'sha256:abc123')
+        >>> parse_image_reference("")
+        ('', '', '')
+    """
     if not registry_reference:
         return "", "", ""
 
@@ -100,16 +140,69 @@ def parse_image_reference(registry_reference: str) -> tuple[str, str, str]:
 
 
 TAG_COMMENT_RE = re.compile(r'^\s*# Tag: ([^,]+), Build date: (\S+)\s*$')
+OCI_VALUE_LINE_RE = re.compile(
+    r'^(?P<indent>\s*)(?P<key>-\s+package|dynamicArtifact):\s*'
+    r'(?P<quote>[\'"]?)oci://(?P<value>[^\'"\s]+)(?P=quote)\s*$'
+)
 OCI_PACKAGE_DIGEST_RE = re.compile(
-    r'^\s*(#\s*)?-\s+package:\s+oci://[^\s]+@(sha256:[a-f0-9]+)\s*$'
+    r'^\s*(?:#\s*-\s+package|-\s+package|dynamicArtifact):\s*[\'"]?oci://[^\s\'"]+@(sha256:[a-f0-9]+)[\'"]?\s*$'
 )
 COMMENTED_OCI_PACKAGE_RE = re.compile(r'^\s*#\s*-\s+package:\s+oci://')
 MIGRATION_HINT_RE = re.compile(
-    r'^\s*#\s*(new approach using oci images|the \'package\' line above|disabled: true)\b'
+    r'^\s*#\s*(new approach using oci images|the \'package\' line above|enabled: false)\b'
 )
 
 
+def oci_value_matches_plugin(
+    oci_value: str,
+    registry_reference_for_oci: str,
+    plugin_name: str,
+    plugin_name_alternative: str,
+    plugin_name_with_dynamic: str,
+    plugin_name_alternative_with_dynamic: str,
+) -> bool:
+    """Return True if an extracted oci:// value (without prefix) belongs to this plugin."""
+    if oci_value == registry_reference_for_oci:
+        return True
+    for pname in (
+        plugin_name,
+        plugin_name_alternative,
+        plugin_name_with_dynamic,
+        plugin_name_alternative_with_dynamic,
+    ):
+        if re.match(rf'.*!{re.escape(pname)}$', oci_value):
+            return True
+        if re.match(rf'.*/{re.escape(pname)}(:|@)', oci_value):
+            return True
+    return False
+
+
 def tag_comment_for_plugin(plugin_data: dict) -> str | None:
+    """Build a tag/build-date comment string from plugin build data.
+
+    Constructs a YAML comment line summarizing the image tag and build date
+    for a plugin. These comments are inserted above OCI package lines in
+    package YAML files and dynamic-plugins.default.yaml to provide
+    human-readable provenance.
+
+    Args:
+        plugin_data: A dict from plugin_builds JSON containing at minimum
+            ``'build-date'``, ``'registryReference'``, and optionally
+            ``'imageTag'``. The tag is taken from ``'imageTag'`` if present,
+            otherwise extracted from the registryReference.
+
+    Returns:
+        A comment string like ``"# Tag: 1.11--1.5.4, Build date: 2025-05-01"``,
+        or ``None`` if any of tag, build_date, or digest is missing.
+
+    Example:
+        >>> tag_comment_for_plugin({
+        ...     'build-date': '2025-05-01',
+        ...     'registryReference': 'quay.io/rhdh/plugin:1.11--1.5.4@sha256:abc',
+        ...     'imageTag': '1.11--1.5.4',
+        ... })
+        '# Tag: 1.11--1.5.4, Build date: 2025-05-01'
+    """
     build_date = plugin_data.get('build-date') or ''
     tag = plugin_data.get('imageTag') or ''
     _, fallback_tag, digest = parse_image_reference(plugin_data.get('registryReference', ''))
@@ -120,19 +213,23 @@ def tag_comment_for_plugin(plugin_data: dict) -> str | None:
 
 
 def is_tag_comment_line(line: str) -> bool:
+    """Check if a line matches the ``# Tag: ..., Build date: ...`` pattern."""
     return bool(TAG_COMMENT_RE.match(line))
 
 
 def tag_comment_line_text(comment: str) -> str:
+    """Wrap a tag comment string with 2-space indentation and trailing newline."""
     return f"  {comment}\n"
 
 
 def pop_trailing_tag_comments(new_lines: list[str]) -> None:
+    """Remove trailing tag comment lines from the end of a line buffer."""
     while new_lines and is_tag_comment_line(new_lines[-1]):
         new_lines.pop()
 
 
 def trailing_tag_comment_matches(new_lines: list[str], expected_comment: str | None) -> bool:
+    """Check if the last non-blank line in the buffer matches the expected tag comment."""
     if not expected_comment:
         return False
     for line in reversed(new_lines):
@@ -145,11 +242,13 @@ def trailing_tag_comment_matches(new_lines: list[str], expected_comment: str | N
 
 
 def digest_from_oci_package_line(line: str) -> str | None:
+    """Extract the sha256 digest from an OCI package line, or None if not matched."""
     m = OCI_PACKAGE_DIGEST_RE.match(line)
-    return m.group(2) if m else None
+    return m.group(1) if m else None
 
 
 def peek_digest_after(lines: list[str], idx: int) -> str | None:
+    """Look ahead in lines starting after idx to find the next OCI package digest."""
     j = idx + 1
     while j < len(lines):
         nl = lines[j]
@@ -167,7 +266,7 @@ def peek_digest_after(lines: list[str], idx: int) -> str | None:
 
 
 def inject_dpdy_tag_comments(output_dir: Path, plugin_builds_dir: Path) -> None:
-    """Ensure Tag/Build date comments on commented oci:// lines and wrapper package lines."""
+    """Delegate to injectDpdyTagComments.py to add Tag/Build date comments to dynamic-plugins.default.yaml."""
     dpdy = output_dir / "dynamic-plugins.default.yaml"
     script = Path(__file__).resolve().parent / "injectDpdyTagComments.py"
     if not dpdy.is_file() or not script.is_file():
@@ -182,6 +281,31 @@ def inject_dpdy_tag_comments(output_dir: Path, plugin_builds_dir: Path) -> None:
 
 
 def build_digest_comment_map(index_data: dict[str, dict]) -> dict[str, str]:
+    """Build a mapping from sha256 digests to their tag comment strings.
+
+    Iterates over index data and creates a lookup dict so that OCI package
+    lines containing a digest can be matched to their corresponding
+    human-readable tag comment.
+
+    Args:
+        index_data: The combined index dict mapping plugin names to their
+            plugin data dicts (as produced by ``generate_index_json``).
+
+    Returns:
+        A dict mapping digest strings to comment strings, e.g.
+        ``{"sha256:abc123": "# Tag: 1.11--1.5.4, Build date: 2025-05-01"}``.
+        Only entries with a valid tag comment and digest are included.
+
+    Example:
+        >>> build_digest_comment_map({
+        ...     "my-plugin": {
+        ...         "registryReference": "quay.io/rhdh/plugin@sha256:abc123",
+        ...         "imageTag": "1.11--1.5.4",
+        ...         "build-date": "2025-05-01",
+        ...     }
+        ... })
+        {'sha256:abc123': '# Tag: 1.11--1.5.4, Build date: 2025-05-01'}
+    """
     digest_comment_map: dict[str, str] = {}
     for pdata in index_data.values():
         comment = tag_comment_for_plugin(pdata)
@@ -193,7 +317,7 @@ def build_digest_comment_map(index_data: dict[str, dict]) -> dict[str, str]:
     return digest_comment_map
 
 def copy_catalog_entities_extensions(source_dir: Path, output_dir: Path) -> None:
-    """Copy content from catalog-entities/extensions source to output catalog-entities/extensions."""
+    """Copy the catalog-entities/extensions/ source directory to the output directory."""
     target_dir = output_dir / "catalog-entities" / "extensions"
 
     if not source_dir.exists():
@@ -223,11 +347,25 @@ def copy_catalog_entities_extensions(source_dir: Path, output_dir: Path) -> None
 
 
 def copy_workspace_metadata_files(overlays_dir: Path, output_dir: Path) -> tuple[set, dict[str, str]]:
-    """
-    Task 2: Find all *.yaml files in workspaces/*/metadata/ and copy them to
-    output catalog-entities/extensions/packages/
+    """Copy workspace metadata YAML files to the output packages directory.
 
-    Returns: (set of YAML file base names, dict mapping base names to full relative paths)
+    Finds all ``workspaces/*/metadata/*.yaml`` files in the overlays directory
+    and copies them to ``<output_dir>/catalog-entities/extensions/packages/``.
+    These are ``kind: Package`` entity files that describe each built plugin
+    artifact (version, OCI reference, appConfigExamples).
+
+    Args:
+        overlays_dir: Root of the overlays repository containing the
+            ``workspaces/`` directory.
+        output_dir: Output directory where the catalog index is being
+            assembled.
+
+    Returns:
+        A 2-tuple of:
+        - A set of YAML file base names (stems without extension), e.g.
+          ``{"backstage-plugin-techdocs", "backstage-plugin-catalog"}``.
+        - A dict mapping each base name to its relative source path, e.g.
+          ``{"backstage-plugin-techdocs": "workspaces/backstage/metadata/backstage-plugin-techdocs.yaml"}``.
     """
     overlay_workspaces = overlays_dir / "workspaces"
     target_packages_dir = output_dir / "catalog-entities" / "extensions" / "packages"
@@ -248,19 +386,30 @@ def copy_workspace_metadata_files(overlays_dir: Path, output_dir: Path) -> tuple
 
     yaml_file_names = set()
     yaml_file_paths = {}
+    kept_names = set()
     for yaml_file in yaml_files:
         target_file = target_packages_dir / yaml_file.name
         log_debug(f"Copy\n  {yaml_file.relative_to(overlay_workspaces)} to\n  {target_file.relative_to(output_dir)}")
         shutil.copy2(str(yaml_file), str(target_file))
+        kept_names.add(yaml_file.name)
         base_name = yaml_file.stem
         yaml_file_names.add(base_name)
         yaml_file_paths[base_name] = Path("workspaces/" + str(yaml_file.relative_to(overlay_workspaces)))
+
+    # Drop Package entities left behind after workspace renames/removals
+    # (e.g. rhdh-bsp-lightspeed.yaml after rename to intelligent-assistant).
+    for existing in sorted(target_packages_dir.glob("*.yaml")):
+        if existing.name == ALL_YAML_FILENAME:
+            continue
+        if existing.name not in kept_names:
+            log_info(f"Removed stale package entity {existing.name}")
+            existing.unlink()
 
     return yaml_file_names, yaml_file_paths
 
 
 def check_image_exists(registry_reference: str) -> bool:
-    """Check if a container image exists using Docker Registry HTTP API v2"""
+    """Check if a container image exists in the registry using a Docker Registry HTTP API v2 HEAD request."""
     try:
         parts = registry_reference.split('/', 1)
         if len(parts) < 2:
@@ -321,12 +470,42 @@ def check_image_exists(registry_reference: str) -> bool:
 
 
 def generate_index_json(plugin_builds_dir: Path, output_dir: Path, report: BuildReport | None = None) -> tuple[dict[str, dict], list[str], list[tuple[str, str, str]], dict[str, str], dict[str, dict]]:
-    """
-    Read *.json files in plugin_builds/ and check if registryReference exists.
-    Combine valid ones into index.json.
-    No filtering — plugin_builds/ is already pre-filtered by bootstrapPluginBuilds.py.
+    """Generate the catalog index.json from plugin_builds/ metadata.
 
-    Returns: (combined_index, found_plugins, missing_references, plugin_workspace_paths, all_plugin_data)
+    This is the core pipeline of the catalog index generator. It reads each
+    JSON file in ``plugin_builds/``, where each file is a dict mapping
+    plugin image names (e.g. ``"red-hat-developer-hub-backstage-plugin-foo"``)
+    to plugin data dicts containing fields like ``registryReference``,
+    ``digest``, ``build-date``, ``vcs-ref``, ``workspacePath``, and
+    ``support``. For each plugin, it verifies the OCI image exists in the
+    registry (swapping registry.access.redhat.com queries to quay.io for
+    unauthenticated access), then writes all valid entries into an ordered
+    ``index.json``.
+
+    The ``plugin_builds/`` directory is pre-filtered by
+    ``bootstrapPluginBuilds.py`` to the appropriate tier (supported,
+    community, etc.), so no additional filtering is performed here.
+
+    Args:
+        plugin_builds_dir: Path to the ``plugin_builds/`` directory
+            containing ``<workspace>/*.json`` files.
+        output_dir: Output directory where ``index.json`` will be written.
+        report: Optional ``BuildReport`` instance for tracking per-plugin
+            pass/fail status of the catalog-index stage.
+
+    Returns:
+        A 5-tuple of:
+        - ``combined_index``: Dict mapping plugin names to their plugin data
+          dicts for all plugins whose OCI images were found.
+        - ``found_plugins``: List of plugin names with valid OCI images,
+          in processing order.
+        - ``missing_references``: List of 3-tuples
+          ``(json_file_path, plugin_name, reason)`` for plugins that could
+          not be resolved.
+        - ``plugin_workspace_paths``: Dict mapping plugin names to their
+          workspace paths (e.g. ``"workspaces/backstage"``).
+        - ``all_plugin_data``: Dict of all plugin data regardless of OCI
+          image existence, used for diagnostic reporting.
     """
     catalog_index_json = output_dir / "index.json"
 
@@ -454,7 +633,41 @@ def generate_index_json(plugin_builds_dir: Path, output_dir: Path, report: Build
 
 
 def update_package_files(output_dir: Path, index_data: dict[str, dict], found_plugins: list[str], plugin_builds_dir: Path) -> None:
-    """Add OCI reference entries alongside existing file path entries"""
+    """Add or update OCI reference entries in package YAML files and dynamic-plugins.default.yaml.
+
+    Performs line-by-line editing on package YAML files and
+    ``dynamic-plugins.default.yaml`` to inject OCI image references. Handles
+    two distinct patterns:
+
+    1. **Replacing existing OCI lines**: When a ``- package: oci://...`` line (in
+       ``dynamic-plugins.default.yaml``) or ``dynamicArtifact: oci://...`` scalar
+       (in package entity YAML) already exists for the plugin, it is replaced
+       with the current digest reference and its tag comment is updated.
+    2. **Adding commented OCI blocks**: When only a file-path entry exists
+       (``- package: ./dynamic-plugins/dist/...``), a commented-out OCI
+       block is added above it with migration hints, preserving the original
+       file-path entry.
+
+    Plugin name matching accounts for alternatives: the
+    ``red-hat-developer-hub-`` vs ``rhdh-`` prefix, and with/without the
+    ``-dynamic`` suffix.
+
+    Package entity files are located by guessed filename and by
+    ``spec.packageName`` via ``build_packages_dir_image_index``.
+
+    Also delegates to ``inject_dpdy_tag_comments`` to handle tag comments
+    on lines that were not matched by the main loop (e.g., wrapper package
+    lines in dynamic-plugins.default.yaml).
+
+    Args:
+        output_dir: Output directory containing the catalog index being
+            assembled.
+        index_data: Combined index dict mapping plugin names to plugin data
+            (from ``generate_index_json``).
+        found_plugins: List of plugin names with valid OCI images.
+        plugin_builds_dir: Path to ``plugin_builds/`` directory, passed
+            through to ``inject_dpdy_tag_comments``.
+    """
     packages_dir = output_dir / "catalog-entities" / "extensions" / "packages"
     dynamic_plugins_yaml = output_dir / "dynamic-plugins.default.yaml"
 
@@ -465,6 +678,7 @@ def update_package_files(output_dir: Path, index_data: dict[str, dict], found_pl
     files_updated = 0
     plugins_matched_in_dynamic_yaml = 0
     digest_comment_map = build_digest_comment_map(index_data)
+    packages_dir_image_index = build_packages_dir_image_index(packages_dir)
 
     for plugin_name in found_plugins:
         plugin_data = index_data[plugin_name]
@@ -473,7 +687,6 @@ def update_package_files(output_dir: Path, index_data: dict[str, dict], found_pl
         name_no_tag, _, parsed_digest = parse_image_reference(registry_reference)
         registry_reference_for_oci = f"{name_no_tag}@{parsed_digest}" if parsed_digest else registry_reference
         expected_comment = tag_comment_for_plugin(plugin_data)
-        expected_oci_line = f"  - package: oci://{registry_reference_for_oci}\n"
 
         plugin_name_alternative = plugin_name.replace("red-hat-developer-hub-", "rhdh-")
 
@@ -482,11 +695,20 @@ def update_package_files(output_dir: Path, index_data: dict[str, dict], found_pl
 
         log_debug(f"Checking for matches: {plugin_name} (or {plugin_name_alternative}, {plugin_name_with_dynamic}, {plugin_name_alternative_with_dynamic})")
 
-        files_to_update = [
-            dynamic_plugins_yaml,
-            packages_dir / f"{plugin_name}.yaml",
-            packages_dir / f"{plugin_name_alternative}.yaml"
-        ]
+        files_to_update = [dynamic_plugins_yaml]
+        for pname in (plugin_name, plugin_name_alternative):
+            files_to_update.append(packages_dir / f"{pname}.yaml")
+            indexed_path = packages_dir_image_index.get(pname)
+            if indexed_path is not None:
+                files_to_update.append(indexed_path)
+
+        seen_paths: set[Path] = set()
+        deduped_files_to_update: list[Path] = []
+        for yaml_path in files_to_update:
+            if yaml_path not in seen_paths:
+                seen_paths.add(yaml_path)
+                deduped_files_to_update.append(yaml_path)
+        files_to_update = deduped_files_to_update
 
         for yaml_file in files_to_update:
             if not yaml_file.exists():
@@ -526,18 +748,30 @@ def update_package_files(output_dir: Path, index_data: dict[str, dict], found_pl
                         i += 1
                         continue
 
+                    oci_line_match = OCI_VALUE_LINE_RE.match(line)
                     matched_oci = False
-
-                    for pname in [plugin_name, plugin_name_alternative,
-                                  plugin_name_with_dynamic, plugin_name_alternative_with_dynamic]:
-                        oci_pattern_old = rf'^  - package: oci://.*!{re.escape(pname)}\s*$'
-                        if re.match(oci_pattern_old, line):
-                            matched_oci = True
-                            break
-                    if not matched_oci:
-                        oci_pattern_new = rf'^  - package: oci://{re.escape(registry_reference_for_oci)}\s*$'
-                        if re.match(oci_pattern_new, line):
-                            matched_oci = True
+                    expected_oci_line = ""
+                    oci_line_indent = "  "
+                    oci_line_key = "- package"
+                    oci_line_quote = ""
+                    if oci_line_match:
+                        oci_line_indent = oci_line_match.group("indent")
+                        oci_line_key = oci_line_match.group("key")
+                        oci_line_quote = oci_line_match.group("quote")
+                        oci_value = oci_line_match.group("value")
+                        matched_oci = oci_value_matches_plugin(
+                            oci_value,
+                            registry_reference_for_oci,
+                            plugin_name,
+                            plugin_name_alternative,
+                            plugin_name_with_dynamic,
+                            plugin_name_alternative_with_dynamic,
+                        )
+                        if matched_oci:
+                            expected_oci_line = (
+                                f"{oci_line_indent}{oci_line_key}: "
+                                f"{oci_line_quote}oci://{registry_reference_for_oci}{oci_line_quote}\n"
+                            )
 
                     if matched_oci:
                         pop_trailing_tag_comments(new_lines)
@@ -581,7 +815,10 @@ def update_package_files(output_dir: Path, index_data: dict[str, dict], found_pl
                             break
 
                         if expected_comment:
-                            new_lines.append(tag_comment_line_text(expected_comment))
+                            if oci_line_key == "dynamicArtifact":
+                                new_lines.append(f"{oci_line_indent}{expected_comment}\n")
+                            else:
+                                new_lines.append(tag_comment_line_text(expected_comment))
                         new_lines.append(expected_oci_line)
                         for pl in preserved_lines:
                             new_lines.append(pl)
@@ -615,7 +852,7 @@ def update_package_files(output_dir: Path, index_data: dict[str, dict], found_pl
                                 new_lines.append(
                                     "  # the 'package' line above and remove the next two lines, keeping the pluginConfig.\n"
                                 )
-                                new_lines.append("  # disabled: true\n")
+                                new_lines.append("  # enabled: false\n")
 
                             new_lines.append(line)
 
@@ -671,28 +908,6 @@ def update_package_files(output_dir: Path, index_data: dict[str, dict], found_pl
             log_debug("dynamic-plugins.default.yaml not present, skipping DPDY updates")
 
 
-def prune_packages_dir(output_dir: Path, found_plugins: list[str]) -> None:
-    """Remove package YAML files from the output that don't correspond to plugins in the index."""
-    packages_dir = output_dir / "catalog-entities" / "extensions" / "packages"
-    if not packages_dir.exists():
-        return
-
-    found_set = set(found_plugins)
-    removed_count = 0
-
-    for yaml_file in packages_dir.glob("*.yaml"):
-        if yaml_file.name == "all.yaml":
-            continue
-        image_name = get_image_name_from_package_yaml(yaml_file)
-
-        if image_name not in found_set:
-            yaml_file.unlink()
-            removed_count += 1
-            log_debug(f"Pruned {yaml_file.name}")
-
-    if removed_count > 0:
-        log_info(f"Pruned {removed_count} package file(s) not in the index")
-
 
 def regenerate_all_yaml_files(output_dir: Path) -> None:
     """Regenerate all.yaml files in plugins/ and packages/ directories"""
@@ -708,14 +923,14 @@ def regenerate_all_yaml_files(output_dir: Path) -> None:
 
         yaml_files = sorted([
             f.name for f in dir_path.iterdir()
-            if f.is_file() and f.suffix == '.yaml' and f.name != 'all.yaml'
+            if f.is_file() and f.suffix == '.yaml' and f.name != ALL_YAML_FILENAME
         ])
 
         if not yaml_files:
             log_warn(f"No YAML files found in {dir_path}")
             continue
 
-        all_yaml_path = dir_path / "all.yaml"
+        all_yaml_path = dir_path / ALL_YAML_FILENAME
         with open(all_yaml_path, 'w', encoding='utf-8') as f:
             f.write("apiVersion: backstage.io/v1alpha1\n")
             f.write("kind: Location\n")
@@ -740,130 +955,6 @@ def _support_label_color(label: str) -> str:
     return colors.get(label, Colors.RED)
 
 
-def scrub_plugin_entity_file(yaml_file: Path, filtered_stems: set[str]) -> str:
-    """Scrub a single Plugin entity YAML file.
-    - If no packages match the filter: delete the file
-    - If all packages match the filter: keep as-is
-    - If mixed: use line-based editing to remove excluded package refs
-
-    Returns: 'removed' | 'stripped' | 'kept' | 'skipped'
-    """
-    try:
-        with open(yaml_file, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
-
-        if not data or data.get('kind') != 'Plugin':
-            return 'skipped'
-
-        spec = data.get('spec', {})
-        packages = spec.get('packages', [])
-
-        if not packages:
-            return 'kept'
-
-        # Ensure packages is a list of strings
-        pkg_list = [p for p in packages if isinstance(p, str)]
-        if not pkg_list:
-            return 'kept'
-
-        matched_packages = [p for p in pkg_list if p in filtered_stems]
-        excluded_packages = {p for p in pkg_list if p not in filtered_stems}
-
-        if not matched_packages:
-            yaml_file.unlink()
-            return 'removed'
-
-        if not excluded_packages:
-            return 'kept'
-
-        # Mixed plugin: remove excluded package lines using line-based editing
-        with open(yaml_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-
-        new_lines = []
-        in_packages = False
-        for line in lines:
-            stripped = line.strip()
-
-            if stripped.startswith('packages:'):
-                in_packages = True
-                new_lines.append(line)
-                continue
-
-            if in_packages:
-                if stripped.startswith('- '):
-                    pkg_name = stripped[2:].strip()
-                    if pkg_name in excluded_packages:
-                        continue
-                    new_lines.append(line)
-                    continue
-                elif not stripped or stripped.startswith('#'):
-                    new_lines.append(line)
-                    continue
-                else:
-                    in_packages = False
-
-            new_lines.append(line)
-
-        with open(yaml_file, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
-
-        return 'stripped'
-
-    except Exception as e:
-        log_error(f"Error scrubbing plugin entity {yaml_file}: {e}")
-        return 'skipped'
-
-
-
-def scrub_catalog_entities(output_dir: Path, overlays_dir: Path, packages_files: list[str]) -> None:
-    """Scrub catalog entities to only retain plugins/packages from the provided package files."""
-    filtered_stems = load_and_resolve_to_stems(packages_files, overlays_dir)
-    log_info(f"Resolved {len(filtered_stems)} filtered package stems from {len(packages_files)} file(s)")
-
-    # Scrub Plugin entity YAMLs
-    plugins_dir = output_dir / "catalog-entities" / "extensions" / "plugins"
-    removed = stripped = kept = skipped = 0
-    if plugins_dir.exists():
-        for yaml_file in sorted(plugins_dir.glob("*.yaml")):
-            if yaml_file.name in ("all.yaml", "1-boilerplate.yaml.sample"):
-                continue
-            result = scrub_plugin_entity_file(yaml_file, filtered_stems)
-            if result == 'removed':
-                removed += 1
-                log_debug(f"Removed excluded plugin: {yaml_file.name}")
-            elif result == 'stripped':
-                stripped += 1
-                log_info(f"Stripped excluded packages from: {yaml_file.name}")
-            elif result == 'kept':
-                kept += 1
-            else:
-                skipped += 1
-
-    log_info(f"Plugin entities: {kept} kept, {stripped} stripped, {removed} removed" +
-             (f", {skipped} skipped" if skipped else ""))
-
-    # Pre-prune Package metadata to only keep filtered plugins.
-    # filtered_stems uses metadata.name (from build_workspace_mappings), so match on that.
-    packages_dir = output_dir / "catalog-entities" / "extensions" / "packages"
-    if packages_dir.exists():
-        pkg_removed = 0
-        for yaml_file in sorted(packages_dir.glob("*.yaml")):
-            if yaml_file.name == "all.yaml":
-                continue
-            try:
-                with open(yaml_file, 'r', encoding='utf-8') as f:
-                    data = yaml.safe_load(f)
-                entity_name = (data or {}).get('metadata', {}).get('name', yaml_file.stem)
-            except Exception:
-                entity_name = yaml_file.stem
-            if entity_name not in filtered_stems:
-                yaml_file.unlink()
-                pkg_removed += 1
-                log_debug(f"Removed excluded package metadata: {yaml_file.name}")
-        if pkg_removed > 0:
-            log_info(f"Package metadata: removed {pkg_removed} excluded files")
-
 
 def main():
     global REGISTRY_BASE
@@ -874,29 +965,25 @@ Usage: python3 generateCatalogIndex.py [--debug] \\
     [-d|--overlays-dir PATH] \\
     [-o|--output-dir PATH] \\
     [-b|--plugin-builds-dir PATH] \\
-    [-p|--packages-file FILE ...] \\
     [-c|--catalog-entities-dir PATH]
 
 Examples:
-    # Generate supported catalog index (union of YAML + txt package lists)
+    # Generate supported catalog index
     python3 generateCatalogIndex.py \\
         -o catalog-index/supported \\
         -b plugin_builds/supported \\
-        -r quay.io/rhdh \\
-        -p catalog-index/default.packages.yaml \\
-        -p rhdh-supported-packages.txt
+        -r quay.io/rhdh
 
     # Generate community catalog index
     python3 generateCatalogIndex.py \\
         -o catalog-index/community \\
         -b plugin_builds/community \\
-        -r ghcr.io/redhat-developer/rhdh-plugin-export-overlays \\
-        -p rhdh-community-packages.txt
+        -r ghcr.io/redhat-developer/rhdh-plugin-export-overlays
 """
 
     parser = argparse.ArgumentParser(
         description='Generate catalog index from plugin_builds and workspace metadata. '
-                    'No filtering — plugin_builds/ is pre-filtered by bootstrapPluginBuilds.py.',
+                    'Catalog entities are copied unfiltered; plugin_builds/ is pre-filtered by bootstrapPluginBuilds.py.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=usage
     )
@@ -929,15 +1016,6 @@ Examples:
         required=True,
         metavar='BASE',
         help='Registry base (e.g., ghcr.io/redhat-developer/rhdh-plugin-export-overlays, quay.io/rhdh)',
-    )
-    parser.add_argument(
-        '-p', '--packages-file',
-        type=str,
-        action='append',
-        metavar='FILE',
-        help='Package list file to filter catalog entities. Can be specified multiple times. '
-             'Accepts YAML (default.packages.yaml format with npm names) or txt '
-             '(workspace paths, one per line). Stems from all files are unioned.',
     )
     parser.add_argument(
         '-c', '--catalog-entities-dir',
@@ -980,18 +1058,10 @@ Examples:
     print(f"\n{Colors.GREEN}=== Copy workspaces/*/metadata/*.yaml to output packages/ ==={Colors.NORM}")
     yaml_file_names, _ = copy_workspace_metadata_files(overlays_dir, output_dir)
 
-    # Scrub catalog entities based on package list files
-    if args.packages_file:
-        print(f"\n{Colors.GREEN}=== Scrub catalog entities to packages from {len(args.packages_file)} file(s) ==={Colors.NORM}")
-        scrub_catalog_entities(output_dir, overlays_dir, args.packages_file)
-
     report = BuildReport(args.report_file)
 
     print(f"\n{Colors.GREEN}=== Generate index.json from plugin_builds ==={Colors.NORM}")
     index_data, found_plugins, missing_references, plugin_workspace_paths, all_plugin_data = generate_index_json(plugin_builds_dir, output_dir, report)
-
-    print(f"\n{Colors.GREEN}=== Prune packages/ to match index ==={Colors.NORM}")
-    prune_packages_dir(output_dir, found_plugins)
 
     print(f"\n{Colors.GREEN}=== Update package files with OCI references ==={Colors.NORM}")
     log_debug(f"Found {len(found_plugins)} plugins with valid OCI images")
@@ -1000,15 +1070,11 @@ Examples:
     print(f"\n{Colors.GREEN}=== Regenerate all.yaml files ==={Colors.NORM}")
     regenerate_all_yaml_files(output_dir)
 
-    # Re-derive yaml_file_names from what actually remains after scrub+prune.
-    # Use spec.packageName→image_name to match found_plugins (which uses the same derivation).
+    # Re-derive yaml_file_names using image names (from spec.packageName) so they
+    # match found_plugins keys (which use the same packageName→image-name derivation).
     packages_dir = output_dir / "catalog-entities" / "extensions" / "packages"
     if packages_dir.exists():
-        yaml_file_names = {
-            get_image_name_from_package_yaml(f)
-            for f in packages_dir.glob("*.yaml")
-            if f.name != "all.yaml"
-        }
+        yaml_file_names = set(build_packages_dir_image_index(packages_dir))
 
     # Compare YAML files vs plugins found
     if yaml_file_names:
@@ -1044,11 +1110,10 @@ Examples:
 
     if missing_references:
         print("\n========")
-        log_warn(f"Could not find {Colors.RED}{len(missing_references)}{Colors.NORM} plugins listed in plugin_builds/ folder! Remember to export and publish them, then re-run this script.")
+        log_warn(f"Could not find {Colors.YELLOW}{len(missing_references)}{Colors.NORM} plugins listed in plugin_builds/ folder! Remember to export and publish them, then re-run this script.")
         for json_file, _plugin_name, reference in missing_references:
-            print(f"  - {json_file} > {Colors.RED}https://{reference}{Colors.NORM}")
-        log_error(f"{len(missing_references)} plugin(s) missing from registry — catalog is incomplete")
-        sys.exit(1)
+            print(f"  - {json_file} > {Colors.YELLOW}https://{reference}{Colors.NORM}")
+        log_warn(f"{len(missing_references)} plugin(s) missing from registry — catalog published without them")
 
 
 if __name__ == "__main__":

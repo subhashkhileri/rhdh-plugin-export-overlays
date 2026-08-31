@@ -1,11 +1,12 @@
 import { expect, test } from "@red-hat-developer-hub/e2e-test-utils/test";
 
-test.describe("Auth plugin", () => {
+test.describe("Auth plugin", { tag: "@auth-tests" }, () => {
   test.beforeAll(async ({ rhdh }) => {
     await rhdh.configure({
       auth: "guest",
       appConfig: "tests/config/auth/app-config-rhdh.yaml",
       dynamicPlugins: "tests/config/auth/dynamic-plugins.yaml",
+      useNewFrontendSystem: true,
     });
     await rhdh.deploy();
   });

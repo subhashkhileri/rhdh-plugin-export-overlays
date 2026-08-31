@@ -191,7 +191,7 @@ if [[ -n "$RHDH_VERSION" ]]; then
     RHDH_VERSION_ARG="--rhdh-version $RHDH_VERSION"
 fi
 # shellcheck disable=SC2086
-if ! python3 "$SCRIPT_DIR/bootstrapPluginBuilds.py" \
+if ! python "$SCRIPT_DIR/bootstrapPluginBuilds.py" \
     --overlays-dir "$OVERLAYS_DIR" \
     --plugin-builds-dir "$PLUGIN_BUILDS_DIR" \
     --registry "$REGISTRY" \
@@ -226,11 +226,11 @@ restore_metadata() {
 trap restore_metadata EXIT
 
 ##############################################
-# Step 2: Enrich plugin_builds/ with registry metadata
+# Step 2: Enrich plugin_builds/ with registry metadata (includes fallback tag resolution)
 ##############################################
 echo -e "\n${green}=== Step 2: Enrich plugin_builds/ with registry metadata ===${norm}"
 # shellcheck disable=SC2086
-if ! python3 "$SCRIPT_DIR/generatePluginBuildInfo.py" \
+if ! python "$SCRIPT_DIR/generatePluginBuildInfo.py" \
     --overlays-dir "$OVERLAYS_DIR" \
     --plugin-builds-dir "$PLUGIN_BUILDS_DIR" \
     --registry "$REGISTRY" \
@@ -266,7 +266,7 @@ if [[ -n "$DEFAULT_PACKAGES_FILE" ]]; then
         DPDY_STATUS="fail"
         echo -e "${red}[ERROR] generateDynamicPluginsDefaultYaml.sh failed!${norm}" >&2
         if [[ -n "$REPORT_FILE" && -f "$REPORT_FILE" ]]; then
-            python3 -c "
+            python -c "
 import sys; sys.path.insert(0, '$SCRIPT_DIR')
 from plugin_utils import BuildReport
 r = BuildReport('$REPORT_FILE')
@@ -283,15 +283,8 @@ r.save()
           '.plugins |= with_entries(.value.stages.dpdy = {status: $status})' \
           "$REPORT_FILE" > "${REPORT_FILE}.tmp" && mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
     fi
-    cp "$DEFAULT_PACKAGES_FILE" "$OUTPUT_DIR/default.packages.yaml"
-    echo -e "${blue}Copied $DEFAULT_PACKAGES_FILE to $OUTPUT_DIR/default.packages.yaml${norm}"
-    if [[ -n "$REPORT_FILE" && -f "$REPORT_FILE" ]]; then
-        jq --arg status "$DPDY_STATUS" \
-          '.plugins |= with_entries(.value.stages.dpdy = {status: $status})' \
-          "$REPORT_FILE" > "${REPORT_FILE}.tmp" && mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
-    fi
 else
-    echo -e "\n${blue}=== Step 3: Skipped (no default.packages.yaml provided) ===${norm}"
+    echo -e "\n${blue}=== Step 3: DPDY Generation — Skipped (no default.packages.yaml provided) ===${norm}"
     if [[ -n "$REPORT_FILE" && -f "$REPORT_FILE" ]]; then
         jq '.plugins |= with_entries(.value.stages.dpdy = {status: "skip"})' \
           "$REPORT_FILE" > "${REPORT_FILE}.tmp" && mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
@@ -302,17 +295,12 @@ fi
 # Step 4: Generate catalog index
 ##############################################
 echo -e "\n${green}=== Step 4: Generate catalog index ===${norm}"
-PACKAGES_FILE_ARGS=""
-for pf in "${PACKAGES_FILES[@]+"${PACKAGES_FILES[@]}"}"; do
-    PACKAGES_FILE_ARGS="$PACKAGES_FILE_ARGS --packages-file $pf"
-done
 # shellcheck disable=SC2086
-if ! python3 "$SCRIPT_DIR/generateCatalogIndex.py" \
+if ! python "$SCRIPT_DIR/generateCatalogIndex.py" \
     --overlays-dir "$OVERLAYS_DIR" \
     --output-dir "$OUTPUT_DIR" \
     --plugin-builds-dir "$PLUGIN_BUILDS_DIR" \
     --registry "$REGISTRY" \
-    $PACKAGES_FILE_ARGS \
     $REPORT_FILE_ARG \
     $DEBUG_FLAG; then
     echo -e "${red}[ERROR] generateCatalogIndex.py failed!${norm}" >&2; exit 1
@@ -321,3 +309,12 @@ fi
 echo -e "\n${green}=== Done ===${norm}"
 echo -e "${blue}Output: $OUTPUT_DIR${norm}"
 echo -e "${blue}Plugin builds: $PLUGIN_BUILDS_DIR${norm}"
+
+# Last thing logged: clear CTA to rebuild plugins still on older fallback tags
+python -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR')
+from pathlib import Path
+from generatePluginBuildInfo import collect_fallback_entries, print_fallback_rebuild_cta
+print_fallback_rebuild_cta(collect_fallback_entries(Path('$PLUGIN_BUILDS_DIR')))
+"

@@ -34,7 +34,7 @@ rhdh-plugin-export-overlays/
 ├── versions.json              # Target versions (Backstage, Node, CLI)
 ├── workspace-discovery-include # Auto-discovery scope patterns
 ├── workspace-discovery-exclude # Workspaces excluded from auto-discovery
-├── workspaces/                # One folder per source workspace
+├── workspaces/                # One folder per source workspace (overlay export)
 │   └── [workspace-name]/
 │       ├── source.json        # Source repository reference
 │       ├── plugins-list.yaml  # Plugin paths + export args
@@ -48,8 +48,16 @@ rhdh-plugin-export-overlays/
 │       └── smoke-tests/       # Smoke test configuration (optional)
 │           ├── test.env
 │           └── app-config.test.yaml
+├── catalog-entities/          # Catalog Plugin / Collection entities
+│   └── extensions/
+│       ├── plugins/           # Marketplace/catalog Plugin YAML (all models)
+│       └── collections/
 └── .github/workflows/         # CI/CD automation
 ```
+
+> Package entities live in `workspaces/*/metadata/`, not under `catalog-entities/`. A `packages/` directory appears only in **catalog-index pipeline output** (see [07 - Plugin Catalog Index](./07-plugin-catalog-index.md)).
+>
+> Some plugins only contribute a Plugin YAML under `catalog-entities/extensions/plugins/` and are **not** exported via `workspaces/` (OCI is built externally). See [03 - Plugin Owner Responsibilities](./03-plugin-owner-responsibilities.md#two-ways-a-plugin-can-appear-in-this-repository).
 
 ---
 
@@ -60,6 +68,8 @@ rhdh-plugin-export-overlays/
 A **workspace** maps to a source repository (or a workspace within a monorepo). Each workspace folder contains all configuration needed to build and publish plugins from that source.
 
 **Example:** `workspaces/backstage/` maps to `https://github.com/backstage/backstage`
+
+Workspaces require a **public** `https://github.com/...` source URL that CI can clone. Overlay export does not currently support private source repositories — for those cases, use catalog-only Plugin metadata (see link above).
 
 ### source.json
 
@@ -142,6 +152,7 @@ spec:
    - [`@red-hat-developer-hub/`](https://github.com/redhat-developer/rhdh-plugins) – RHDH Plugins
    - [`@roadiehq/`](https://github.com/RoadieHQ/roadie-backstage-plugins) – Roadie Backstage Plugins
 2. Plugin is compatible with the target Backstage version
+3. Plugin is licensed under **Apache License 2.0**. Plugins with incompatible licenses cannot be onboarded.
 
 ### How Automatic Updates and Discovery Work
 
@@ -258,7 +269,42 @@ Manual PRs should be reserved for situations where automatic discovery does not 
 
    Create one YAML file per plugin following the Package schema.
 
-5. **Open PR against `main`**
+5. **Add a CODEOWNERS entry:**
+
+   Add an entry for your workspace in [`.github/CODEOWNERS`](../.github/CODEOWNERS) so that PRs touching the workspace require review from the right team or individuals. The list is alphabetically ordered.
+
+   ```
+   /workspaces/your-plugin                                                @your-team @your-username
+   ```
+
+6. **Open PR against `main`**
+
+   **Optional — catalog inclusion:** Workspace Package metadata alone does not advertise the plugin in the **Supported Plugins** catalog or the curated **Optional Extras** catalog.
+
+   That requires RHDH PM approval (and a tracking RHDHPLAN feature JIRA), plus Plugin entity YAML under `catalog-entities/extensions/plugins/` (listed in `all.yaml`), the matching package-list file (`rhdh-community-packages.txt` for Optional Extras, or `rhdh-supported-packages.txt` for Supported Plugins).
+
+   For GA only with PM approval, an `enabled:` or `disabled:` entry in `default.packages.yaml` is also required.
+
+   Collection membership under `catalog-entities/extensions/collections/` is a further optional step when PM approves it.
+
+   See [03 - Plugin Owner Responsibilities](./03-plugin-owner-responsibilities.md#1-keep-plugin-metadata-and-catalog-curation-files-up-to-date).
+
+### Catalog-only plugins (external OCI build)
+
+If the plugin OCI image is built and published outside this repository, do **not** add a `workspaces/` entry unless you are also moving export into overlays with a public cloneable source.
+
+**Model B is listing-only in the catalog index today** — Plugin YAML alone does not produce installable Package entities or overlay-resolved OCI. See [03 - Plugin Owner Responsibilities](./03-plugin-owner-responsibilities.md#two-ways-a-plugin-can-appear-in-this-repository) and [07 - Plugin Catalog Index](./07-plugin-catalog-index.md).
+
+Instead:
+
+1. Add or update the Plugin entity under `catalog-entities/extensions/plugins/`
+2. Reference it from `catalog-entities/extensions/plugins/all.yaml` (required for the Location to pick it up)
+3. Keep title, description, support level, links, and configuration / external-install guidance accurate
+4. Treat the catalog entry as **listing-only** (omit `packages:` unless you are linking to Package entities that already exist via Model A). Do not assume Plugin YAML alone makes an external OCI image installable from Extensions
+5. **Optional — curated catalogs:** If RHDH PM approves Supported Plugins / Optional Extras inclusion (tracking RHDHPLAN feature JIRA), also update the matching package-list / collection / `default.packages.yaml` entries **when Package entities exist** (Model A or hybrid). Listing-only Model B with no workspace Package metadata skips package-list maintenance
+6. Open a PR against `main`
+
+Owner obligations for that path are documented in [03 - Plugin Owner Responsibilities](./03-plugin-owner-responsibilities.md#two-ways-a-plugin-can-appear-in-this-repository).
 
 ---
 
@@ -278,13 +324,24 @@ This builds and publishes test OCI artifacts tagged as `pr_<number>__<version>`.
 
 After `/publish` completes, smoke tests run automatically if:
 - PR touches exactly one workspace
-- Each plugin has a metadata file
+- At least one published plugin has runnable metadata
+
+Published plugins without runnable metadata are skipped individually. Smoke tests are skipped only when no published plugin in the workspace can produce runnable metadata, or when plugin config references environment variables and the workspace `smoke-tests/test.env` file is missing. If the file exists but required variables are missing from it, the workflow fails instead of skipping.
 
 To re-run smoke tests manually:
 
 ```
 /smoketest
 ```
+
+Use this to override the RHDH container image with a PR tag from `quay.io/rhdh-community/rhdh`:
+
+```
+/smoketest pr-4929-90eff067
+```
+
+`/smoketest <tag>` resolves to `quay.io/rhdh-community/rhdh:<tag>`.
+Allowed tags include `pr-4907`, `pr-4929-90eff067`, `next`, `next-1.10-244a2755`, and `next-8a0d43e7`.
 
 Plugin-specific configuration is extracted from `spec.appConfigExamples[0].content` in each plugin's metadata file and placed under `pluginConfig` in the generated config. The optional workspace-level `app-config.test.yaml` is for test-only or shared workspace settings. If a plugin's config references environment variables (e.g., `${API_TOKEN}`), provide them in `workspaces/<ws>/smoke-tests/test.env`.
 
@@ -296,7 +353,7 @@ Use the OCI references from the bot's comment to test in your own Backstage inst
 # dynamic-plugins.yaml
 plugins:
   - package: oci://ghcr.io/redhat-developer/rhdh-plugin-your-plugin:pr_123__1.0.0
-    disabled: false
+    enabled: true
 ```
 
 ---

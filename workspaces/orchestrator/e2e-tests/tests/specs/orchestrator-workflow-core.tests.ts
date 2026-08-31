@@ -3,7 +3,6 @@ import { OrchestratorPage } from "@red-hat-developer-hub/e2e-test-utils/pages";
 import { OrchestratorPO } from "../support/pages/orchestrator-po.js";
 import {
   patchHttpbin,
-  restartAndWait,
   cleanupAfterTest,
 } from "../support/utils/test-helpers.js";
 
@@ -30,17 +29,17 @@ export function registerOrchestratorCoreWorkflowTests(
     test("Run Greeting workflow and verify Workflows tab", async ({}) => {
       test.setTimeout(150_000);
       await orchestratorPo.openGreetingWorkflowFromSidebar();
-      await orchestrator.runGreetingWorkflow();
+      await orchestratorPo.runGreetingWorkflow();
       await orchestratorPo.openOrchestratorFromSidebar();
-      await orchestrator.validateGreetingWorkflow();
+      await orchestratorPo.validateGreetingWorkflow();
     });
 
     // eslint-disable-next-line playwright/expect-expect
     test("Verify Greeting workflow run details", async ({}) => {
       test.setTimeout(150_000);
       await orchestratorPo.openGreetingWorkflowFromSidebar();
-      await orchestrator.runGreetingWorkflow();
-      await orchestrator.reRunGreetingWorkflow();
+      await orchestratorPo.runGreetingWorkflow();
+      await orchestratorPo.reRunGreetingWorkflow();
       await orchestrator.validateWorkflowRunsDetails();
     });
   });
@@ -60,17 +59,17 @@ export function registerOrchestratorCoreWorkflowTests(
     test("Run Failswitch workflow and verify statuses", async ({}) => {
       test.setTimeout(180_000);
       await orchestratorPo.openFailswitchWorkflowFromSidebar();
-      await orchestrator.runFailSwitchWorkflow("OK");
-      await orchestrator.validateCurrentWorkflowStatus("Completed");
+      await orchestratorPo.runFailSwitchWorkflow("OK");
+      await orchestratorPo.validateCurrentWorkflowStatus("Completed");
       await orchestrator.reRunFailSwitchWorkflow("Wait");
-      await orchestrator.abortWorkflow();
+      await orchestratorPo.abortWorkflow();
       await orchestrator.reRunFailSwitchWorkflow("KO");
-      await orchestrator.validateCurrentWorkflowStatus("Failed");
+      await orchestratorPo.validateCurrentWorkflowStatus("Failed");
       await orchestratorPo.openFailswitchWorkflowFromSidebar();
-      await orchestrator.runFailSwitchWorkflow("Wait");
-      await orchestrator.validateCurrentWorkflowStatus("Running");
+      await orchestratorPo.runFailSwitchWorkflow("Wait");
+      await orchestratorPo.validateCurrentWorkflowStatus("Running");
       await orchestratorPo.openOrchestratorFromSidebar();
-      await orchestrator.validateWorkflowAllRuns();
+      await orchestratorPo.validateWorkflowAllRuns();
       await orchestrator.validateWorkflowAllRunsStatusIcons();
     });
 
@@ -78,56 +77,54 @@ export function registerOrchestratorCoreWorkflowTests(
     test("Abort workflow", async ({}) => {
       test.setTimeout(180_000);
       await orchestratorPo.openFailswitchWorkflowFromSidebar();
-      await orchestrator.runFailSwitchWorkflow("Wait");
-      await orchestrator.abortWorkflow();
+      await orchestratorPo.runFailSwitchWorkflow("Wait");
+      await orchestratorPo.abortWorkflow();
     });
 
     // eslint-disable-next-line playwright/expect-expect
     test("Verify Running status details", async ({}) => {
       test.setTimeout(180_000);
       await orchestratorPo.openFailswitchWorkflowFromSidebar();
-      await orchestrator.runFailSwitchWorkflow("Wait");
-      await orchestrator.validateWorkflowStatusDetails("Running");
+      await orchestratorPo.runFailSwitchWorkflow("Wait");
+      await orchestratorPo.validateWorkflowStatusDetails("Running");
     });
 
     // eslint-disable-next-line playwright/expect-expect
     test("Verify Failed status details", async ({}) => {
       test.setTimeout(180_000);
       await orchestratorPo.openFailswitchWorkflowFromSidebar();
-      await orchestrator.runFailSwitchWorkflow("KO");
-      await orchestrator.validateWorkflowStatusDetails("Failed");
+      await orchestratorPo.runFailSwitchWorkflow("KO");
+      await orchestratorPo.validateWorkflowStatusDetails("Failed");
     });
 
     // eslint-disable-next-line playwright/expect-expect
     test("Verify Completed status details", async ({}) => {
       test.setTimeout(180_000);
       await orchestratorPo.openFailswitchWorkflowFromSidebar();
-      await orchestrator.runFailSwitchWorkflow("OK");
-      await orchestrator.validateCurrentWorkflowStatus("Completed");
+      await orchestratorPo.runFailSwitchWorkflow("OK");
+      await orchestratorPo.validateCurrentWorkflowStatus("Completed");
     });
 
     // eslint-disable-next-line playwright/expect-expect
     test("Rerun Failswitch from failure point", async ({}, testInfo) => {
-      // 4 minutes: pod restarts + 60s sleep + failure/recovery time
-      test.setTimeout(240_000);
+      // HTTPBIN patch + 60s Wait timer + failure/recovery rerun
+      test.setTimeout(360_000);
       const ns = testInfo.project.name;
 
       test.skip(!ns, "NAME_SPACE not set");
 
       const originalHttpbin = "https://httpbin.org/";
       try {
-        patchHttpbin(ns!, "https://foobar.org/");
-        restartAndWait(ns!);
+        await patchHttpbin(ns!, "https://foobar.org/");
 
         await orchestratorPo.openFailswitchWorkflowFromSidebar();
-        await orchestrator.runFailSwitchWorkflow("Wait");
-        await orchestrator.validateCurrentWorkflowStatus("Failed");
+        await orchestratorPo.runFailSwitchWorkflow("Wait");
+        await orchestratorPo.validateCurrentWorkflowStatus("Failed");
 
-        patchHttpbin(ns!, originalHttpbin);
-        restartAndWait(ns!);
+        await patchHttpbin(ns!, originalHttpbin);
 
         await orchestrator.reRunOnFailure("From failure point");
-        await orchestrator.validateCurrentWorkflowStatus("Completed");
+        await orchestratorPo.validateCurrentWorkflowStatus("Completed");
       } catch (e) {
         console.error(`[rerun-failure] Test failed: ${e}`);
         testInfo.annotations.push({
@@ -137,7 +134,7 @@ export function registerOrchestratorCoreWorkflowTests(
         throw e;
       } finally {
         try {
-          cleanupAfterTest(ns!, originalHttpbin);
+          await cleanupAfterTest(ns!, originalHttpbin);
         } catch (cleanupErr) {
           testInfo.annotations.push({
             type: "cleanup-error",
@@ -151,17 +148,15 @@ export function registerOrchestratorCoreWorkflowTests(
     test("Verify Failswitch suggested workflow link", async ({}) => {
       test.setTimeout(180_000);
       await orchestratorPo.openFailswitchWorkflowFromSidebar();
-      await orchestrator.runFailSwitchWorkflow("OK");
+      await orchestratorPo.runFailSwitchWorkflow("OK");
       await orchestratorPo.followSuggestedGreetingWorkflow();
     });
   });
 
   test.describe("Workflow all runs", () => {
-    let orchestrator: OrchestratorPage;
     let orchestratorPo: OrchestratorPO;
 
     test.beforeEach(async ({ page, loginHelper, uiHelper }) => {
-      orchestrator = new OrchestratorPage(page);
       orchestratorPo = new OrchestratorPO(page, uiHelper);
       await loginHelper.loginAsKeycloakUser();
     });
@@ -169,7 +164,7 @@ export function registerOrchestratorCoreWorkflowTests(
     // eslint-disable-next-line playwright/expect-expect
     test("Verify Workflow All Runs", async ({}) => {
       await orchestratorPo.openOrchestratorFromSidebar();
-      await orchestrator.validateWorkflowAllRuns();
+      await orchestratorPo.validateWorkflowAllRuns();
     });
   });
 }

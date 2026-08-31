@@ -2,7 +2,7 @@
 # Manual changes might be lost - proceed with caution!
 
 __metadata:
-  version: 8
+  version: 10
   cacheKey: 10
 
 "@axe-core/playwright@npm:4.11.1":
@@ -289,9 +289,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@red-hat-developer-hub/e2e-test-utils@npm:1.1.44":
-  version: 1.1.44
-  resolution: "@red-hat-developer-hub/e2e-test-utils@npm:1.1.44"
+"@red-hat-developer-hub/e2e-test-utils@npm:2.1.11":
+  version: 2.1.11
+  resolution: "@red-hat-developer-hub/e2e-test-utils@npm:2.1.11"
   dependencies:
     "@axe-core/playwright": "npm:4.11.1"
     "@backstage-community/plugin-rbac-common": "npm:1.26.0"
@@ -314,7 +314,7 @@ __metadata:
     zx: "npm:8.8.5"
   peerDependencies:
     "@playwright/test": ^1.57.0
-  checksum: 10/530f63e45c5ed712c9960ad80c13592f8f09b50c0d7d8c045b0d2c1d0203f189986f9378be03f16a336b114cfd92444ef3f7051623348dbf3bcaa095d5d5f000
+  checksum: 10/86e37a7689fca892233382bd4a21b2cb4d520898479ad9ff54f1c141e74e115e11ebaad55c2af7b4308952d58219ddf08148da20d00b1bc538c7ca1617b1970d
   languageName: node
   linkType: hard
 
@@ -1771,7 +1771,7 @@ __metadata:
   dependencies:
     "@eslint/js": "npm:10.0.1"
     "@playwright/test": "npm:1.59.1"
-    "@red-hat-developer-hub/e2e-test-utils": "npm:1.1.44"
+    "@red-hat-developer-hub/e2e-test-utils": "npm:2.1.11"
     "@types/node": "npm:25.5.2"
     dotenv: "npm:16.6.1"
     eslint: "npm:10.2.0"
@@ -1780,6 +1780,7 @@ __metadata:
     prettier: "npm:3.8.1"
     typescript: "npm:6.0.2"
     typescript-eslint: "npm:8.58.1"
+    undici: "npm:7.3.0"
   languageName: unknown
   linkType: soft
 
@@ -2197,6 +2198,13 @@ __metadata:
   version: 7.18.2
   resolution: "undici-types@npm:7.18.2"
   checksum: 10/e61a5918f624d68420c3ca9d301e9f15b61cba6e97be39fe2ce266dd6151e4afe424d679372638826cb506be33952774e0424141200111a9857e464216c009af
+  languageName: node
+  linkType: hard
+
+"undici@npm:7.3.0":
+  version: 7.3.0
+  resolution: "undici@npm:7.3.0"
+  checksum: 10/8165c3a18cd045c70b009db006bee1784c5ba405634e8d2017107f65220a23190e2dfbbcb314bec71add1e43cabcd7515cd29b655c819f22e59b5e2e7025db20
   languageName: node
   linkType: hard
 

@@ -214,34 +214,26 @@ explain_missing() {
 # -----------------------------------------------------------------------------
 build_plugin_entry() {
   local meta_path=$1
-  local disabled=$2
+  local enabled=$2
 
   local dynamic_artifact package_value
   dynamic_artifact=$(yq_raw '.spec.dynamicArtifact // ""' "$meta_path" 2>/dev/null)
-
-  if [[ "$dynamic_artifact" == ./.* ]]; then
-    package_value=$dynamic_artifact
-  elif [[ "$dynamic_artifact" == *"oci://"*"!"* ]]; then
-    # Strip !fragment if present (e.g. oci://...!package-name)
-    package_value="${dynamic_artifact%%!*}"
-  else
-    package_value=$dynamic_artifact
-  fi
+  package_value=$dynamic_artifact
 
   local entry
   if [[ "${YQ_IS_MIKE_FARAH:-0}" -eq 1 ]]; then
-    # Preserve nested scalar quoting (pluginConfig); pass package/disabled via env — mikefarah has no jq --arg on eval.
+    # Preserve nested scalar quoting (pluginConfig); pass package/enabled via env — mikefarah has no jq --arg on eval.
     export MF_PKG="$package_value"
-    export MF_DIS="$disabled"
+    export MF_ENB="$enabled"
     entry=$("$YQ_BIN" --unwrapScalar=false eval --expression \
-      '{"package": env(MF_PKG), "disabled": (env(MF_DIS) == "true"), "pluginConfig": .spec.appConfigExamples[0].content} | with_entries(select(.value != null))' \
+      '{"package": env(MF_PKG), "enabled": (env(MF_ENB) == "true"), "pluginConfig": .spec.appConfigExamples[0].content} | with_entries(select(.value != null))' \
       "$meta_path" -o yaml)
   else
     # shellcheck disable=SC2016
     entry=$("$YQ_BIN" "${YQ_YAML_OPT}" \
       --arg pkg "$package_value" \
-      --argjson dis "$disabled" \
-      '({package: $pkg, disabled: $dis} +
+      --argjson enb "$enabled" \
+      '({package: $pkg, enabled: $enb} +
        (if .spec.appConfigExamples[0].content then {pluginConfig: .spec.appConfigExamples[0].content} else {} end))
        | with_entries(select(.value != null))' \
       "$meta_path")
@@ -287,7 +279,7 @@ while [[ $idx -lt $enabled_count ]]; do
     explain_missing "$pkg_name" >&2
     exit 1
   fi
-  entry=$(build_plugin_entry "$meta_path" "false") || {
+  entry=$(build_plugin_entry "$meta_path" "true") || {
     echo "  ✗ $pkg_name (failed to generate entry)" >&2
     exit 1
   }
@@ -317,7 +309,7 @@ while [[ $idx -lt $disabled_count ]]; do
     explain_missing "$pkg_name" >&2
     exit 1
   fi
-  entry=$(build_plugin_entry "$meta_path" "true") || {
+  entry=$(build_plugin_entry "$meta_path" "false") || {
     echo "  ✗ $pkg_name (failed to generate entry)" >&2
     exit 1
   }
@@ -348,7 +340,7 @@ cat << EOL > "$OUTPUT_FILE".head
 # See https://github.com/redhat-developer/rhdh-plugin-export-overlays/
 #
 # To update this file, trigger a rebuld of the index image from 
-# https://gitlab.cee.redhat.com/rhidp/rhdh-plugin-catalog/-/blob/rhdh-1-rhel-9/build/ci/update-index.sh
+# https://gitlab.cee.redhat.com/rhidp/rhdh-plugin-catalog/-/blob/main/build/ci/update-index.sh
 EOL
 cat "$OUTPUT_FILE".head "$OUTPUT_FILE" > "$OUTPUT_FILE"_
 mv "$OUTPUT_FILE"_ "$OUTPUT_FILE"
@@ -360,8 +352,8 @@ inject_tag_comments_in_dpdy "$OUTPUT_FILE"
 # Stats (from final YAML)
 # -----------------------------------------------------------------------------
 total=$(yq_raw '.plugins | length' "$OUTPUT_FILE")
-enabled_num=$(yq_raw '[.plugins[] | select(.disabled == false)] | length' "$OUTPUT_FILE")
-disabled_num=$(yq_raw '[.plugins[] | select(.disabled == true)] | length' "$OUTPUT_FILE")
+enabled_num=$(yq_raw '[.plugins[] | select(.enabled == true)] | length' "$OUTPUT_FILE")
+disabled_num=$(yq_raw '[.plugins[] | select(.enabled == false)] | length' "$OUTPUT_FILE")
 with_config=$(yq_raw '[.plugins[] | select(has("pluginConfig"))] | length' "$OUTPUT_FILE")
 
 if [[ $DEBUG -eq 1 ]]; then

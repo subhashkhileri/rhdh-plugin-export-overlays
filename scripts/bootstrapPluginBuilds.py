@@ -24,10 +24,65 @@ from plugin_utils import (
     log_warn,
     log_error,
     set_debug,
-    read_plugins_list,
-    match_metadata_to_plugin_path,
+    build_workspace_mappings,
     load_and_resolve_to_npm_names,
 )
+
+
+def versions_match_minor(v1: str, v2: str) -> bool:
+    """Check if two semver strings share the same major.minor version.
+    Returns False for empty or malformed versions.
+    """
+    if not v1 or not v2:
+        return False
+    parts1 = v1.split(".")[:2]
+    parts2 = v2.split(".")[:2]
+    return len(parts1) == 2 and len(parts2) == 2 and parts1 == parts2
+
+
+def get_outdated_workspaces(
+    workspace_dirs: list[Path],
+    backstage_version: str,
+) -> dict[str, dict[str, str]]:
+    """Identify workspaces whose effective backstage version doesn't match the target minor.
+
+    For each workspace, the effective version is determined by:
+    1. backstage.json (override) if it exists
+    2. source.json repo-backstage-version otherwise
+
+    Returns a dict mapping workspace name to {"expected": ..., "found": ...} for mismatches.
+    """
+    outdated = {}
+    for workspace_dir in workspace_dirs:
+        ws_name = workspace_dir.name
+        effective_version = ""
+        source_json = workspace_dir / "source.json"
+        backstage_json = workspace_dir / "backstage.json"
+
+        if backstage_json.exists():
+            try:
+                with open(backstage_json, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    effective_version = data.get("version", "")
+            except (json.JSONDecodeError, OSError) as e:
+                log_warn(f"Malformed backstage.json in workspace {ws_name}: {e}")
+        elif source_json.exists():
+            try:
+                with open(source_json, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    effective_version = data.get("repo-backstage-version", "")
+            except (json.JSONDecodeError, OSError) as e:
+                log_warn(f"Malformed source.json in workspace {ws_name}: {e}")
+        else:
+            log_warn(f"No source.json or backstage.json found in workspace {ws_name}")
+
+        if not effective_version:
+            log_warn(f"Missing backstage version for workspace {ws_name}, treating as outdated")
+            outdated[ws_name] = {"expected": backstage_version, "found": "missing"}
+        elif not versions_match_minor(effective_version, backstage_version):
+            outdated[ws_name] = {"expected": backstage_version, "found": effective_version}
+
+    return outdated
 
 
 def package_name_to_image_name(package_name: str) -> str:
@@ -35,6 +90,34 @@ def package_name_to_image_name(package_name: str) -> str:
     e.g., '@red-hat-developer-hub/backstage-plugin-foo' → 'red-hat-developer-hub-backstage-plugin-foo'
     """
     return package_name.lstrip('@').replace('/', '-')
+
+
+def remove_stale_plugin_builds(plugin_builds_dir: Path, expected_files: set[Path]) -> int:
+    """Delete plugin_builds JSON files not produced by this bootstrap run.
+
+    Handles renames/removals (e.g. lightspeed → intelligent-assistant) by
+    removing leftover ``<workspace>/<image>.json`` files and empty workspace
+    directories. ``expected_files`` are paths relative to ``plugin_builds_dir``.
+
+    Returns the number of deleted JSON files.
+    """
+    if not plugin_builds_dir.exists():
+        return 0
+
+    deleted = 0
+    for json_file in sorted(plugin_builds_dir.glob("*/*.json")):
+        rel = json_file.relative_to(plugin_builds_dir)
+        if rel not in expected_files:
+            log_info(f"Removed stale {rel}")
+            json_file.unlink()
+            deleted += 1
+
+    for ws_dir in sorted(plugin_builds_dir.iterdir()):
+        if ws_dir.is_dir() and not any(ws_dir.iterdir()):
+            log_info(f"Removed empty workspace dir {ws_dir.name}/")
+            ws_dir.rmdir()
+
+    return deleted
 
 
 def parse_dynamic_artifact(dynamic_artifact: str) -> str:
@@ -216,21 +299,34 @@ Examples:
 
     print(f"\n{Colors.GREEN}=== Bootstrap plugin_builds from workspace metadata ==={Colors.NORM}\n")
 
+    # Build workspace mappings upfront for stem → workspace path resolution
+    ws_mappings = build_workspace_mappings(overlays_dir)
+
     # Find all workspace directories with metadata
     workspace_dirs = sorted([
         d for d in workspaces_dir.iterdir()
         if d.is_dir() and (d / "metadata").is_dir()
     ])
 
+    # Pre-compute outdated workspaces (backstage minor version mismatch)
+    outdated_workspaces = get_outdated_workspaces(workspace_dirs, backstage_version)
+    if outdated_workspaces:
+        log_warn(f"Found {len(outdated_workspaces)} workspace(s) with backstage version mismatch:")
+        for ws_name, info in sorted(outdated_workspaces.items()):
+            log_warn(f"  {ws_name}: expected {info['expected']}, found {info['found']}")
+
     created_count = 0
     updated_count = 0
     skipped_count = 0
+    bs_mismatch_count = 0
     no_ref_count = 0
+    expected_files: set[Path] = set()
+    # Plugin keys touched this run (success or fail) — used to prune build-report.json
+    expected_plugins: set[str] = set()
 
     for workspace_dir in workspace_dirs:
         workspace_name = workspace_dir.name
         metadata_dir = workspace_dir / "metadata"
-        plugin_paths = read_plugins_list(workspace_dir)
 
         yaml_files = sorted(metadata_dir.glob("*.yaml"))
         if not yaml_files:
@@ -252,14 +348,6 @@ Examples:
                 package_name = spec.get('packageName', '')
                 support_level = spec.get('support', '')
 
-                # Derive workspacePath
-                matched_path = match_metadata_to_plugin_path(stem, plugin_paths)
-                if matched_path:
-                    workspace_path = f"{workspace_name}/{matched_path}"
-                else:
-                    workspace_path = f"{workspace_name}/{stem}"
-                    log_debug(f"No plugins-list match for {stem}, using fallback: {workspace_path}")
-
                 # Check packages filter (by npm package name)
                 if packages_set is not None and package_name not in packages_set:
                     skipped_count += 1
@@ -267,11 +355,33 @@ Examples:
 
                 # Construct registryReference
                 image_name = package_name_to_image_name(package_name) if package_name else stem
+
+                bs_mismatch_info = outdated_workspaces.get(workspace_name)
+                tag_backstage_version = backstage_version
+                if bs_mismatch_info:
+                    bs_mismatch_count += 1
+                    found = bs_mismatch_info.get("found", "")
+                    if found and found != "missing":
+                        tag_backstage_version = found
+                    log_debug(
+                        f"{stem} (workspace {workspace_name}): "
+                        f"backstage version {bs_mismatch_info['found']} != expected "
+                        f"{bs_mismatch_info['expected']}, using tag bs version {tag_backstage_version}"
+                    )
+
+                # Look up workspacePath from pre-built mappings (uses scored matching
+                # + process-of-elimination to handle divergent folder/package names)
+                workspace_path = ws_mappings.ws_path_to_npm and next(
+                    (wp for wp, npm in ws_mappings.ws_path_to_npm.items() if npm == package_name), None
+                )
+                if not workspace_path:
+                    workspace_path = f"{workspace_name}/{stem}"
+                    log_debug(f"No workspace mapping for {package_name}, using fallback: {workspace_path}")
                 effective_registry = registry_base
                 if support_level == 'community' and community_registry != registry_base:
                     effective_registry = community_registry
                 registry_reference = construct_registry_reference(
-                    effective_registry, image_name, version, backstage_version, rhdh_version, dynamic_artifact,
+                    effective_registry, image_name, version, tag_backstage_version, rhdh_version, dynamic_artifact,
                 )
 
                 if not registry_reference:
@@ -314,6 +424,8 @@ Examples:
                     json.dump(new_data, f, indent=2)
                     f.write('\n')
 
+                expected_files.add(Path(workspace_name) / f"{image_name}.json")
+                expected_plugins.add(image_name)
                 log_debug(f"{action} {json_file.relative_to(plugin_builds_dir)}")
 
                 report.add_plugin(
@@ -325,11 +437,22 @@ Examples:
                 stage_details = {}
                 if registry_reference:
                     stage_details["oci_ref"] = registry_reference
+                if bs_mismatch_info:
+                    stage_details["bs_version_mismatch"] = True
+                    stage_details["reason"] = "Backstage version mismatch"
+                    stage_details["expected_version"] = bs_mismatch_info["expected"]
+                    stage_details["found_version"] = bs_mismatch_info["found"]
                 report.set_stage(image_name, "bootstrap", "pass", **stage_details)
 
             except Exception as e:
                 log_error(f"Error processing {yaml_file}: {e}")
+                expected_plugins.add(yaml_file.stem)
                 report.set_stage(yaml_file.stem, "bootstrap", "fail", reason=str(e))
+
+    deleted_count = remove_stale_plugin_builds(plugin_builds_dir, expected_files)
+    stale_report = report.remove_stale_plugins(expected_plugins)
+    for stale_name in stale_report:
+        log_info(f"Removed stale build-report entry {stale_name}")
 
     # Summary
     total = created_count + updated_count
@@ -337,8 +460,20 @@ Examples:
     log_info(f"Created: {Colors.GREEN}{created_count}{Colors.NORM}")
     if updated_count > 0:
         log_info(f"Updated: {Colors.BLUE}{updated_count}{Colors.NORM}")
+    if deleted_count > 0:
+        log_info(f"Removed stale: {Colors.YELLOW}{deleted_count}{Colors.NORM}")
+    if stale_report:
+        log_info(
+            f"Removed stale build-report entries: "
+            f"{Colors.YELLOW}{len(stale_report)}{Colors.NORM}"
+        )
     if skipped_count > 0:
         log_info(f"Filtered out: {skipped_count}")
+    if bs_mismatch_count > 0:
+        log_warn(
+            f"Backstage version mismatch (included with warning): "
+            f"{Colors.YELLOW}{bs_mismatch_count}{Colors.NORM}"
+        )
     if no_ref_count > 0:
         log_warn(f"No OCI reference (local path): {Colors.YELLOW}{no_ref_count}{Colors.NORM}")
     log_info(f"Total: {total}")
