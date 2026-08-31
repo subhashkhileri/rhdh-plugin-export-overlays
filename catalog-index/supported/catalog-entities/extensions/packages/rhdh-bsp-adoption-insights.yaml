@@ -16,11 +16,12 @@ metadata:
   tags: []
 spec:
   packageName: '@red-hat-developer-hub/backstage-plugin-adoption-insights'
-  dynamicArtifact: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-adoption-insights
-  version: 0.8.2
+  # Tag: bs_1.52.0__0.9.1, Build date: 2026-05-22T15:07:25Z
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights@sha256:0b661d2b66e6687a9558cb1bbe272c5f646607018bbe3babd7797aace73accdc"
+  version: 0.9.1
   backstage:
     role: frontend-plugin
-    supportedVersions: 1.45.3
+    supportedVersions: 1.52.0
   author: Red Hat
   support: generally-available
   lifecycle: active
@@ -34,6 +35,7 @@ spec:
             red-hat-developer-hub.backstage-plugin-adoption-insights:
               translationResources:
                 - importName: adoptionInsightsTranslations
+                  module: Alpha
                   ref: adoptionInsightsTranslationRef
               appIcons:
                 - name: adoptionInsightsIcon

@@ -16,11 +16,12 @@ metadata:
   tags: []
 spec:
   packageName: "@red-hat-developer-hub/backstage-plugin-adoption-insights-backend"
-  dynamicArtifact: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-adoption-insights-backend-dynamic
-  version: 0.8.2
+  # Tag: bs_1.52.0__0.9.1, Build date: 2026-05-22T15:13:50Z
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights-backend@sha256:9822421cf104c2e26741c7f615c5f969e5321dc8c9bc307df83661e3a69f5e07"
+  version: 0.9.1
   backstage:
     role: backend-plugin
-    supportedVersions: 1.45.3
+    supportedVersions: 1.52.0
   author: Red Hat
   support: generally-available
   lifecycle: active

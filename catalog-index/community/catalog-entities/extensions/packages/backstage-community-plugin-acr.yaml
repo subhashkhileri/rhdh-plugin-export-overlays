@@ -1,0 +1,44 @@
+apiVersion: extensions.backstage.io/v1alpha1
+kind: Package
+metadata:
+  name: backstage-community-plugin-acr
+  namespace: rhdh
+  title: "ACR"
+  links:
+    - url: https://red.ht/rhdh
+      title: Homepage
+    - url: https://github.com/backstage/community-plugins/issues
+      title: Bugs
+    - title: Source Code
+      url: https://github.com/backstage/community-plugins/tree/main/workspaces/acr
+  annotations:
+    backstage.io/source-location: url:https://github.com/backstage/community-plugins/tree/main/workspaces/acr
+  tags: []
+spec:
+  packageName: "@backstage-community/plugin-acr"
+  # Tag: bs_1.52.0__1.27.0
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-acr@sha256:645312fcf15b21cf7fba3c36900d47c09b74e7828e33d556d7c8e6451a71798c"
+  version: 1.27.0
+  backstage:
+    role: frontend-plugin
+    supportedVersions: 1.52.0
+  author: Red Hat
+  support: community
+  lifecycle: active
+  partOf:
+    - azure-container-registry
+  appConfigExamples:
+    - title: Default configuration
+      content:
+        dynamicPlugins:
+          frontend:
+            backstage-community.plugin-acr:
+              mountPoints:
+                - mountPoint: entity.page.image-registry/cards
+                  importName: AcrImagesEntityContent
+                  config:
+                    layout:
+                      gridColumn: 1 / -1
+                    if:
+                      anyOf:
+                        - isAcrAvailable

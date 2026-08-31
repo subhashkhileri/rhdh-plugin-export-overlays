@@ -17,12 +17,12 @@ metadata:
     - automation
 spec:
   packageName: "@red-hat-developer-hub/backstage-plugin-orchestrator-form-widgets"
-  # Tag: 1.11--1.10.7, Build date: 2026-05-22T15:06:15Z
-  dynamicArtifact: "oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-form-widgets@sha256:d99af76aeb55debb79f78cafbd73bf76fc3019af7215549cdb906de8c1174f51"
-  version: 1.10.7
+  # Tag: bs_1.52.0__2.0.0, Build date: 2026-05-22T15:06:15Z
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-orchestrator-form-widgets@sha256:b30923e063387310b82f100985164cd7f1746825b771b83de733ebbda6789257"
+  version: 2.0.0
   backstage:
     role: frontend-plugin
-    supportedVersions: 1.49.3
+    supportedVersions: 1.52.0
   author: Red Hat
   support: generally-available
   lifecycle: active
@@ -33,4 +33,6 @@ spec:
       content:
         dynamicPlugins:
           frontend:
-            red-hat-developer-hub.backstage-plugin-orchestrator-form-widgets: {}
+            # OFS loads BackstagePlugin from Legacy after NFS graduation (PluginRoot is NFS).
+            red-hat-developer-hub.backstage-plugin-orchestrator-form-widgets:
+              pluginModule: Legacy

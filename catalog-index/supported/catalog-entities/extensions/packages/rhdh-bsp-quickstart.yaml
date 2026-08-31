@@ -15,11 +15,12 @@ metadata:
     backstage.io/source-location: url:https://github.com/redhat-developer/rhdh-plugins/tree/main/workspaces/quickstart
 spec:
   packageName: '@red-hat-developer-hub/backstage-plugin-quickstart'
-  dynamicArtifact: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-quickstart
-  version: 1.9.6
+  # Tag: bs_1.52.1__2.0.1, Build date: 2026-05-22T15:00:24Z
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-quickstart@sha256:8e476df1f5db9cd06d2b251ecac3e0775f7c4180fdfc9cc681ee632397ae1e20"
+  version: 2.0.1
   backstage:
     role: frontend-plugin
-    supportedVersions: 1.45.3
+    supportedVersions: 1.52.0
   author: Red Hat
   support: generally-available
   lifecycle: active
@@ -98,6 +99,26 @@ spec:
               cta:
                 text: View Learning Paths
                 link: /learning-paths
+            - title: Set up Intelligent Assistant
+              titleKey: steps.setupLightspeed.title
+              icon: Lightspeed
+              description: Connect Intelligent Assistant to a supported large language model (LLM) and configure permissions to provide your AI-powered assistance to your developers.
+              descriptionKey: steps.setupLightspeed.description
+              cta:
+                text: Learn more
+                textKey: steps.setupLightspeed.ctaTitle
+                link: https://docs.redhat.com/en/documentation/red_hat_developer_hub/latest/html/interacting_with_red_hat_developer_lightspeed_for_red_hat_developer_hub/
+            - title: Get started with Intelligent Assistant
+              titleKey: steps.getStartedWithLightspeed.title
+              icon: Lightspeed
+              roles:
+                - developer
+              description: Troubleshoot issues, generate code, and learn about platform resources using AI-powered chat.
+              descriptionKey: steps.getStartedWithLightspeed.description
+              cta:
+                text: Learn more
+                textKey: steps.getStartedWithLightspeed.ctaTitle
+                link: https://docs.redhat.com/en/documentation/red_hat_developer_hub/latest/html/interacting_with_red_hat_developer_lightspeed_for_red_hat_developer_hub/
         dynamicPlugins:
           frontend:
             red-hat-developer-hub.backstage-plugin-quickstart:
@@ -105,16 +126,21 @@ spec:
                 - importName: quickstartTranslations
                   module: Alpha
                   ref: quickstartTranslationRef
+              # Legacy exports require `module: Legacy` — they are not available on the default module.
               mountPoints:
                 - mountPoint: application/provider
                   importName: QuickstartDrawerProvider
+                  module: Legacy
                 - mountPoint: application/internal/drawer-state
                   importName: QuickstartDrawerStateExposer
+                  module: Legacy
                 - mountPoint: application/internal/drawer-content
                   importName: QuickstartDrawerContent
+                  module: Legacy
                   config:
                     id: quickstart
                 - mountPoint: global.header/help
                   importName: QuickstartButton
+                  module: Legacy
                   config:
                     priority: 100

@@ -1,0 +1,7 @@
+{
+  "red-hat-developer-hub-backstage-plugin-app-integrations": {
+    "workspacePath": "app-defaults/plugins/app-integrations",
+    "support": "tech-preview",
+    "registryReference": "ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-integrations:bs_1.52.1__0.1.1"
+  }
+}
