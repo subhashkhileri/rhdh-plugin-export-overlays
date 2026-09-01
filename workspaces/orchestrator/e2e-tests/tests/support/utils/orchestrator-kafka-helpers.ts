@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import yaml from "js-yaml";
 import { runOc } from "./oc-helpers.js";
 
 const kafkaHelpersDir = import.meta.dirname;
@@ -74,39 +75,41 @@ export async function patchAppConfigKafka(
     );
   }
 
+  let data: Record<string, unknown>;
+  try {
+    const loaded = yaml.load(current);
+    data =
+      loaded && typeof loaded === "object" && !Array.isArray(loaded)
+        ? (loaded as Record<string, unknown>)
+        : {};
+  } catch (err) {
+    throw new Error(
+      `Failed to parse ${APP_CONFIG_KEY} as YAML: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
+  }
+
+  const orchRaw = data.orchestrator;
+  const orch: Record<string, unknown> =
+    orchRaw && typeof orchRaw === "object" && !Array.isArray(orchRaw)
+      ? (orchRaw as Record<string, unknown>)
+      : {};
+  orch.kafka = {
+    clientId: "orchestratorKafka",
+    brokers: [bootstrap],
+  };
+  data.orchestrator = orch;
+
+  const merged = yaml.dump(data, {
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+  });
+
   const tmpDir = mkdtempSync(join(tmpdir(), "orch-kafka-appconfig-"));
-  const inFile = join(tmpDir, "app-config-in.yaml");
   const outFile = join(tmpDir, "app-config-out.yaml");
   try {
-    writeFileSync(inFile, current, "utf-8");
-    const py = `
-import sys
-try:
-    import yaml
-except ImportError:
-    sys.stderr.write("PyYAML required (python3 -m pip install pyyaml)\\n")
-    sys.exit(2)
-path_in, path_out, bootstrap = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(path_in, encoding="utf-8") as f:
-    data = yaml.safe_load(f) or {}
-orch = data.setdefault("orchestrator", {})
-orch["kafka"] = {
-    "clientId": "orchestratorKafka",
-    "brokers": [bootstrap],
-}
-with open(path_out, "w", encoding="utf-8") as f:
-    yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
-`;
-    const pyResult = spawnSync(
-      "python3",
-      ["-c", py, inFile, outFile, bootstrap],
-      { encoding: "utf-8" },
-    );
-    if (pyResult.status !== 0) {
-      throw new Error(
-        `Failed to merge orchestrator.kafka into app-config: ${pyResult.stderr || pyResult.stdout}`,
-      );
-    }
+    writeFileSync(outFile, merged, "utf-8");
 
     const apply = spawnSync(
       "bash",

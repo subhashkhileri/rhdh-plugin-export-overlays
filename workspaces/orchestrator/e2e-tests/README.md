@@ -28,7 +28,6 @@ yarn test:kafka
 ### Prerequisites for the Kafka suite
 
 - Cluster-admin (or enough rights for OperatorHub Subscription + Kafka CRs)
-- PyYAML available to `python3` (`python3 -c 'import yaml'`) for app-config merge
 - Same base orchestrator e2e substrate as the main suite (OSL / SonataFlow / RHDH via `orchestrator.spec.ts`)
 
 ### Optional env knobs
