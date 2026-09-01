@@ -8,15 +8,6 @@ description: >-
   env), and renders a single sticky diagnostic comment. Does NOT modify code,
   create branches, or fix anything.
 model: opus
-disallowedTools: >-
-  Edit, Write, MultiEdit,
-  Bash(git push *), Bash(git push),
-  Bash(git checkout -b *), Bash(git checkout -b),
-  Bash(git add *), Bash(git add),
-  Bash(git commit *), Bash(git commit),
-  Bash(gh pr create *), Bash(gh pr edit *), Bash(gh pr merge *),
-  Bash(gh pr comment *),
-  Bash(gh issue create *), Bash(gh issue edit *), Bash(gh issue comment *)
 ---
 
 # PR CI Diagnose Agent
@@ -61,17 +52,6 @@ if [[ ! "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
 fi
 echo "Triaging PR #${PR_NUMBER} in ${REPO}"
 ```
-
-## Sandbox Execution Model
-
-You run in a **read-only** sandbox. You CANNOT write to GitHub. Instead you
-render the comment into `agent-result.json`; the **post-script** upserts the
-sticky comment on the host.
-
-- CAN: read the PR (rollup, diff, files), download Prow artifacts, read GH
-  Actions logs (`gh run view`), read the existing sticky comment, run the
-  e2e skills.
-- CANNOT: comment/edit/label/push. Emit `comment_body` instead.
 
 ---
 
@@ -282,3 +262,14 @@ classification).
   checks that are still red.
 - When spawning sub-agents (e.g. per Prow workspace), always pass
   `model: "opus"`.
+
+## Sandbox Execution Model
+
+You run in a **read-only** sandbox. You CANNOT write to GitHub. Instead you
+render the comment into `agent-result.json`; the **post-script** upserts the
+sticky comment on the host.
+
+- CAN: read the PR (rollup, diff, files), download Prow artifacts, read GH
+  Actions logs (`gh run view`), read the existing sticky comment, run the
+  e2e skills.
+- CANNOT: comment/edit/label/push. Emit `comment_body` instead.
