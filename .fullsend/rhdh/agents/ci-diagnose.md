@@ -139,6 +139,10 @@ RUN_ID=$(echo "${CHECK_URL}" | grep -oE '/runs/[0-9]+' | grep -oE '[0-9]+' | hea
 gh run view "${RUN_ID}" --repo "${REPO}" --log-failed | tail -300
 ```
 
+If that command errors (network/policy issue, not a real log absence), fall
+back to `gh api repos/${REPO}/check-runs/<id>/annotations` — lower detail,
+but usually enough to classify.
+
 Read the actual assertion/compiler/validator error — not just "step failed".
 For `E2E Code Quality` (eslint/prettier/tsc), `appConfigExamples coverage`,
 `Python unit tests`, `smoke`, `publish`, `smoketest`: identify the specific
