@@ -87,20 +87,17 @@ HEAD_SHA=$(echo "${ROLLUP}" | jq -r '.headRefOid')
 echo "Head SHA: ${HEAD_SHA}"
 ```
 
-Extract the curated red checks. Use `.name` for CheckRuns and `.context` for
-StatusContexts. **Sort the names** — the state marker you emit later must match
-byte-for-byte what the bootstrap computes:
+Extract the curated red checks with the **shared filter** —
+`.fullsend/rhdh/scripts/curated-check-filter.jq` — the single source of truth
+for check-set membership, also loaded by the `ci-diagnose-agent.yaml`
+bootstrap workflow. Do not hand-roll this predicate here; editing the check
+set means editing that one file. **Sort the names** — the state marker you
+emit later must match byte-for-byte what the bootstrap computes:
 
 ```bash
-RED=$(echo "${ROLLUP}" | jq -c '
-  .statusCheckRollup
-  | map(select(
-      ((.__typename=="StatusContext") and (.context|startswith("ci/prow/")) and (.state|IN("FAILURE","ERROR")))
-      or ((.__typename=="StatusContext") and (.context|IN("publish","smoketest")) and (.state|IN("FAILURE","ERROR")))
-      or ((.__typename=="CheckRun") and (.name|IN("E2E Code Quality","appConfigExamples coverage","Python unit tests","smoke")) and (.conclusion|IN("FAILURE","TIMED_OUT","ACTION_REQUIRED")))
-    ))
-  | map({name:(.name // .context), typename:.__typename, context:.context, conclusion:.conclusion, state:.state, url:(.detailsUrl // .targetUrl)})
-  | sort_by(.name)')
+FILTER=".fullsend/rhdh/scripts/curated-check-filter.jq"
+RED=$(echo "${ROLLUP}" | jq -c -f "${FILTER}" \
+  | jq -c 'map({name:(.name // .context), typename:.__typename, context:.context, conclusion:.conclusion, state:.state, url:(.detailsUrl // .targetUrl)}) | sort_by(.name)')
 echo "Red curated checks: ${RED}"
 
 # The exact sorted name array for the state marker (Phase 4). Emit this

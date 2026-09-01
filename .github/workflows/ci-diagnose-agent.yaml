@@ -30,9 +30,11 @@
 # NOT emit webhook events (GitHub anti-recursion, ADR 0033), so a GITHUB_TOKEN
 # label would never reach fullsend.yaml. The App installation token does.
 #
-# The curated check set and the RED jq filter MUST stay byte-for-byte in sync
-# with .fullsend/rhdh/agents/ci-diagnose.md Phase 1 — the state marker the agent
-# writes is compared here to decide whether to re-fire.
+# The curated check set lives in ONE place — .fullsend/rhdh/scripts/
+# curated-check-filter.jq — checked out below and loaded with `jq -f` by both
+# this job and .fullsend/rhdh/agents/ci-diagnose.md Phase 1. The state marker
+# the agent writes is compared here to decide whether to re-fire, so both
+# sides must derive the same sorted red-name set from the same filter.
 name: CI Diagnose Agent
 
 on:
@@ -86,6 +88,14 @@ jobs:
       || github.event.state == 'failure'
       || github.event.state == 'error'
     steps:
+      # Only the shared jq filter is needed — sparse-checkout keeps this fast.
+      - name: Checkout curated-check filter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .fullsend/rhdh/scripts/curated-check-filter.jq
+          sparse-checkout-cone-mode: false
+
       - name: Resolve PR, compute red set, and decide
         id: decide
         env:
@@ -136,16 +146,12 @@ jobs:
           fi
 
           # -- Compute the sorted RED curated check names --------------------
-          # MUST match ci-diagnose.md Phase 1's filter exactly.
-          RED_NAMES=$(echo "${ROLLUP}" | jq -c '
-            .statusCheckRollup
-            | map(select(
-                ((.__typename=="StatusContext") and (.context|startswith("ci/prow/")) and (.state|IN("FAILURE","ERROR")))
-                or ((.__typename=="StatusContext") and (.context|IN("publish","smoketest")) and (.state|IN("FAILURE","ERROR")))
-                or ((.__typename=="CheckRun") and (.name|IN("E2E Code Quality","appConfigExamples coverage","Python unit tests","smoke")) and (.conclusion|IN("FAILURE","TIMED_OUT","ACTION_REQUIRED")))
-              ))
-            | map(.name // .context)
-            | sort')
+          # Shared filter — see .fullsend/rhdh/scripts/curated-check-filter.jq
+          # (also loaded by ci-diagnose.md Phase 1; keeps the dedup contract
+          # from silently drifting between the two consumers).
+          RED_NAMES=$(echo "${ROLLUP}" \
+            | jq -c -f .fullsend/rhdh/scripts/curated-check-filter.jq \
+            | jq -c 'map(.name // .context) | sort')
           echo "Red curated checks: ${RED_NAMES}"
 
           NEW_STATE=$(jq -cn --arg sha "${HEAD_SHA}" --argjson red "${RED_NAMES}" \
