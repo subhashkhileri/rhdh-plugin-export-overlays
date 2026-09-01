@@ -16,8 +16,10 @@
 #   1. Locate and validate agent-result.json
 #   2. Scan the result file for secrets (gitleaks) — refuse to post on a hit
 #   3. Resolve the PR number (from the result, falling back to GITHUB_ISSUE_URL)
-#   4. Find the existing sticky comment via the `<!-- ci-diagnose -->` marker
-#   5. PATCH it in place if found, else create a new comment
+#   4. If the PR advanced past the analyzed head_sha while the agent ran,
+#      swap in a stale notice instead of the (now outdated) diagnosis
+#   5. Find the existing sticky comment via the `<!-- ci-diagnose -->` marker
+#   6. PATCH it in place if found, else create a new comment
 #
 # Required environment variables:
 #   GH_TOKEN          — GitHub token with pull-requests/issues write
@@ -161,13 +163,41 @@ CHECK_COUNT="$(jq -r '.checks | length' "${RESULT_FILE}")"
 echo "PR #${PR_NUMBER} — verdict: ${VERDICT} — ${CHECK_COUNT} check(s)"
 
 # ---------------------------------------------------------------------------
-# 4. Find the existing sticky comment
+# 4. Refuse to post a stale diagnosis
+# ---------------------------------------------------------------------------
+# The agent can run for up to timeout_minutes; a new commit may land on the
+# PR before it finishes. head_sha is the commit the agent actually analyzed
+# (read at agent runtime, per the schema) — compare it against the PR's
+# CURRENT head rather than trusting the trigger event.
+RECORDED_HEAD="$(jq -r '.head_sha // empty' "${RESULT_FILE}")"
+STALE="false"
+if [[ -n "${RECORDED_HEAD}" ]]; then
+  CURRENT_HEAD="$(gh api "repos/${REPO_FULL_NAME}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null || true)"
+  if [[ -n "${CURRENT_HEAD}" && "${RECORDED_HEAD}" != "${CURRENT_HEAD}" ]]; then
+    STALE="true"
+    echo "::warning::Analyzed head ${RECORDED_HEAD} is stale (current head ${CURRENT_HEAD}) — posting a stale notice instead"
+    {
+      echo "${STICKY_MARKER}"
+      echo "### 🔍 CI Diagnosis"
+      echo ""
+      echo "This PR advanced before the diagnosis finished, so the result below is outdated and was not posted."
+      echo ""
+      echo "- Analyzed head: \`${RECORDED_HEAD}\`"
+      echo "- Current head: \`${CURRENT_HEAD}\`"
+      echo ""
+      echo "A fresh diagnosis will run automatically as CI completes on the new commit."
+    } > "${BODY_FILE}"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Find the existing sticky comment
 # ---------------------------------------------------------------------------
 EXISTING_ID="$(gh api "repos/${REPO_FULL_NAME}/issues/${PR_NUMBER}/comments" --paginate \
   --jq "[.[] | select(.body | contains(\"${STICKY_MARKER}\"))] | last | .id // empty" 2>/dev/null || true)"
 
 # ---------------------------------------------------------------------------
-# 5. Upsert the comment
+# 6. Upsert the comment
 # ---------------------------------------------------------------------------
 if [[ -n "${EXISTING_ID}" ]]; then
   echo "Editing existing sticky comment #${EXISTING_ID}..."
@@ -199,9 +229,16 @@ fi
 rm -f "${BODY_FILE}"
 
 echo ""
-echo "=== CI Diagnose posted ==="
-echo "PR:      #${PR_NUMBER}"
-echo "Verdict: ${VERDICT}"
-echo "Checks:  ${CHECK_COUNT}"
+if [[ "${STALE}" == "true" ]]; then
+  echo "=== CI Diagnose posted (stale notice) ==="
+  echo "PR:            #${PR_NUMBER}"
+  echo "Analyzed head: ${RECORDED_HEAD}"
+  echo "Current head:  ${CURRENT_HEAD}"
+else
+  echo "=== CI Diagnose posted ==="
+  echo "PR:      #${PR_NUMBER}"
+  echo "Verdict: ${VERDICT}"
+  echo "Checks:  ${CHECK_COUNT}"
+fi
 echo ""
 echo "Post-ci-diagnose complete."
