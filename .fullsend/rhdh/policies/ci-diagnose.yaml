@@ -51,7 +51,29 @@ network_policies:
         protocol: rest
         enforcement: enforce
         access: read-only
+      # gh CLI uses POST /graphql for reads (e.g. `gh pr view --json
+      # statusCheckRollup`, `gh pr diff`); protocol: rest does not cover
+      # this — it needs its own endpoint entry. See review.yaml.
+      - host: "api.github.com"
+        port: 443
+        protocol: graphql
+        enforcement: enforce
+        access: read-only
+        path: "/graphql"
       - host: "github.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+      # `gh run view --log-failed` / the job-logs REST endpoint 302s here to
+      # fetch the actual log blob; without these the redirect target is
+      # unreachable and gh reports it as a 403.
+      - host: "results-receiver.actions.githubusercontent.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-only
+      - host: "*.blob.core.windows.net"
         port: 443
         protocol: rest
         enforcement: enforce

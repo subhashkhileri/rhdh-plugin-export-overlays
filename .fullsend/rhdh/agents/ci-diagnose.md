@@ -123,6 +123,12 @@ logs (`pods.txt`, `events.txt`, `backstage-backend.log`) for deployment
 failures. **If a skill fails to invoke, stop and report which one** — do not
 guess a classification without it.
 
+**Multiple red checks are independent — diagnose them in parallel.** When two
+or more curated checks are red (e.g. two Prow lanes, or a Prow lane plus a
+GHA check), dispatch one sub-agent per check concurrently rather than working
+through them one at a time. Each check's evidence, artifacts, and
+classification are self-contained, so there's nothing to serialize on.
+
 ### GitHub Actions (`gha_check`) and comment-command (`status`)
 
 The rollup `url` points at the Actions run/job. Get the run id and read the
@@ -154,6 +160,14 @@ gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only
 | `product_bug` | Upstream plugin source is broken (API changed, component missing) — not fixable in this repo. |
 | `config_env` | CI env problem: missing secret, expired cred, quota, `/publish` never run before `/smoketest`. |
 | `needs_human` | Genuinely ambiguous after full investigation. Say what's missing. |
+
+**`product_bug` vs `pre_existing`:** these overlap whenever a failure would
+reproduce on `main` too. Tie-break on *where the fix belongs*, not on
+whether it would also fail on `main`: `product_bug` if the root cause is in
+upstream plugin/image source (would be fixed by a change outside this repo);
+`pre_existing` if it's this repo's own CI/config/test code that's broken
+(would be fixed by a change inside this repo, just not by this PR). Both
+still mean "not this PR's fault."
 
 **Differential rule (same as nightly triage):** a timeout is not automatically
 `flake`. If the same infrastructure worked for other checks/tests in this run,
