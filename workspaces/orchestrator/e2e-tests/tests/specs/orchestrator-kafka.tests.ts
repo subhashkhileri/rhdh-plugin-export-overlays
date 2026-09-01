@@ -17,7 +17,10 @@ const ensureDataIndexOrSkip = createDataIndexGuard();
 const KAFKA_RBAC_ROLE = "role:default/kafkaRunAsEventTest";
 
 function kafkaE2eEnabled(): boolean {
-  return process.env.ORCH_E2E_KAFKA === "true";
+  return (
+    process.env.E2E_NIGHTLY_MODE === "true" ||
+    process.env.E2E_NIGHTLY_MODE === "1"
+  );
 }
 
 function kafkaRbacPolicies(): PolicySpec[] {
@@ -33,14 +36,14 @@ function kafkaRbacPolicies(): PolicySpec[] {
 }
 
 /**
- * Optional L4b: Kafka + lock-flow Run as Event.
- * Enable with ORCH_E2E_KAFKA=true (see README / yarn test:kafka).
+ * L4b: Kafka + lock-flow Run as Event.
+ * Runs on nightlies only (`E2E_NIGHTLY_MODE`); skipped in default PR e2e.
  */
 export function registerOrchestratorKafkaTests(): void {
   test.describe("Kafka Run as Event", () => {
     test.skip(
       !kafkaE2eEnabled(),
-      "Set ORCH_E2E_KAFKA=true to run optional Kafka Run as Event e2e",
+      "Kafka Run as Event e2e runs on nightlies only (E2E_NIGHTLY_MODE)",
     );
 
     let apiToken: string;

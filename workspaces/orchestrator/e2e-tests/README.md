@@ -2,24 +2,22 @@
 
 Playwright suite for the Orchestrator overlays workspace. Default `yarn test` deploys SonataFlow workflows (greeting, failswitch, etc.) and runs the core UI/API tests.
 
-## Optional: Kafka Run as Event (`ORCH_E2E_KAFKA`)
+## Kafka Run as Event (nightlies only)
 
-Env-gated L4b coverage for cloud-event workflow execution ([RHIDP-16050](https://redhat.atlassian.net/browse/RHIDP-16050)):
+L4b coverage for cloud-event workflow execution ([RHIDP-16050](https://redhat.atlassian.net/browse/RHIDP-16050)). Enabled when `E2E_NIGHTLY_MODE` is set (nightly CI); skipped in default PR e2e:
 
 1. Installs a small Streams for Apache Kafka cluster (1 broker + 1 controller, RF=1) in the e2e namespace
 2. Patches RHDH `app-config-rhdh` with `orchestrator.kafka` and restarts RHDH (scale 0→1)
 3. Deploys `lock-flow` from [orchestrator-demo `08_kafka_events/callback-flow`](https://github.com/rhdhorchestrator/orchestrator-demo/tree/main/08_kafka_events/callback-flow)
 4. Asserts UI **Run as Event** triggers the workflow (event alert and/or Running/Completed)
 
-### How to run
+### How to run locally (simulate nightly)
 
 ```bash
 # After the usual e2e cluster/auth prerequisites (oc login, Keycloak env, etc.)
 yarn test:kafka
-# equivalent: ORCH_E2E_KAFKA=true yarn test
+# equivalent: E2E_NIGHTLY_MODE=true yarn test
 ```
-
-Without `ORCH_E2E_KAFKA=true`, the Kafka suite is skipped and does not affect the default job.
 
 ### Capacity / runtime
 
@@ -37,6 +35,6 @@ Without `ORCH_E2E_KAFKA=true`, the Kafka suite is skipped and does not affect th
 
 | Var                             | Role                                                                                                                                     |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `ORCH_E2E_KAFKA=true`           | Enable Kafka Run as Event suite                                                                                                          |
+| `E2E_NIGHTLY_MODE=true`         | Enable Kafka Run as Event suite (set automatically in nightly CI)                                                                        |
 | `SKIP_ORCHESTRATOR_DEPLOY=true` | Skip SonataFlow/Loki/RHDH redeploy (local/dev on an already-live substrate). Requires `RHDH_BASE_URL` (errors if unset). Not used in CI. |
 | `DEMO_WORKFLOW_REPO_REF`        | Pin `orchestrator-demo` clone (branch/tag/SHA) for lock-flow and token-propagation; unset uses default-branch tip                        |
