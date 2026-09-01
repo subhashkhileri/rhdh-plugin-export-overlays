@@ -73,7 +73,12 @@ network_policies:
         protocol: rest
         enforcement: enforce
         access: read-only
-      - host: "*.blob.core.windows.net"
+      # Narrower than *.blob.core.windows.net: only GitHub's own Actions
+      # results storage-account naming convention (observed: sa5, sa13),
+      # not arbitrary Azure Storage tenants. If GitHub changes the naming
+      # scheme this stops matching — degrades to the annotations-API
+      # fallback in ci-diagnose.md rather than a hard failure.
+      - host: "productionresultssa*.blob.core.windows.net"
         port: 443
         protocol: rest
         enforcement: enforce
