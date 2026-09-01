@@ -31,11 +31,11 @@ import type {
  * - `aggregate.ts` via isSweepSummary, and `aggregate-report.ts` which reads
  *   `report.frontend.bundles[]`.
  *
- * That is the whole list. `native-smoke.yaml` and `community-plugin-sweep.yaml` move these
- * files around as artifacts but never parse `schemaVersion`, and the sweep's
- * download-artifact has no `run-id`, so a shard artifact is never read across runs — an
- * older schema cannot reach a newer aggregator. Everything else in the repo called
- * `results.json` is Playwright's report, which is unrelated.
+ * That is the whole list of code consumers. Three workflows move these files as
+ * artifacts without reading `schemaVersion`, so a bump does not break them — but
+ * `catalog-index-sanity.yaml` jq's FIELDS out of a report (`catalogIndex.*`,
+ * `backend.*`, `frontend.*`) for its summary, so renaming one degrades that to nulls
+ * silently. The sweep never reads a shard artifact across runs.
  *
  * 2: added `exclusions` and the support/exclusion fields on `workspace`.
  * 3: added `installShortfall` and the `fail-install` status.
@@ -43,15 +43,16 @@ import type {
  * 5: added `mf.nfsFeaturesError`, so a failure to read backstage.features is not
  *    recorded as the artifact declaring none.
  * 6: added `scalprum` and `configSchema` on each frontend bundle (RHIDP-16229).
+ * 7: added `catalogIndex`, the provenance block catalog-index mode records.
  */
-export const REPORT_SCHEMA_VERSION = 6;
+export const REPORT_SCHEMA_VERSION = 7;
 
 export type Status =
   | "pass"
   | "fail-load"
   | "fail-start"
   | "fail-bundle"
-  /** The install produced fewer plugins than the workspace declared. */
+  /** The install produced fewer plugins than the source declared. */
   | "fail-install"
   | "error";
 
@@ -109,10 +110,26 @@ export type WorkspaceInfo = {
   outOfScope?: number;
 };
 
+/**
+ * Catalog-index-mode provenance: which index was validated and how its declared
+ * packages split, so a "pass" cannot hide that most of the index was never installed.
+ * `refCount` is what the install is measured against (see `installShortfall`);
+ * `enabledInIndex` is recorded because it is the number people expect to see and it is
+ * deliberately NOT the number this mode validates — see src/catalog-index.ts.
+ */
+export type CatalogIndexInfo = {
+  source: string;
+  declared: number;
+  refCount: number;
+  inImage: number;
+  enabledInIndex: number;
+};
+
 export type Report = {
   schemaVersion: number;
   cliVersion: string;
   workspace?: WorkspaceInfo;
+  catalogIndex?: CatalogIndexInfo;
   backend: {
     total: number;
     loaded: number;
@@ -129,7 +146,7 @@ export type Report = {
   };
   /** Tracked exclusions that fired this run, each with its ticket. */
   exclusions: ExclusionRecord[];
-  /** Set when the install laid out fewer plugins than the workspace declared. */
+  /** Set when the install laid out fewer plugins than the source declared. */
   installShortfall?: string;
   status: Status;
 };
