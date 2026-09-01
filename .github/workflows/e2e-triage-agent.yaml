@@ -19,7 +19,7 @@ name: E2E Triage Agent
 
 on:
   schedule:
-    - cron: "15 6 * * *" # 06:15 UTC (11:45 IST) — after the main nightly
+    - cron: "15 5 * * *" # 05:15 UTC (10:45 IST) — after the main nightly
   workflow_dispatch:
     inputs:
       prow_url:
@@ -115,7 +115,7 @@ jobs:
       - name: Generate GitHub App token
         if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') != 'true'
         id: generate-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.RHDH_GITHUB_APP_ID }}
           private-key: ${{ secrets.RHDH_GITHUB_APP_PRIVATE_KEY }}
