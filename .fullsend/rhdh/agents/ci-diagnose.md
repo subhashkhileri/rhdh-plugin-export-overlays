@@ -136,12 +136,18 @@ failing step logs:
 
 ```bash
 RUN_ID=$(echo "${CHECK_URL}" | grep -oE '/runs/[0-9]+' | grep -oE '[0-9]+' | head -1)
-gh run view "${RUN_ID}" --repo "${REPO}" --log-failed | tail -300
+LOG=$(gh run view "${RUN_ID}" --repo "${REPO}" --log-failed)
+echo "${LOG}" | grep -B2 -A15 '##\[error\]' || echo "${LOG}" | tail -300
 ```
 
-If that command errors (network/policy issue, not a real log absence), fall
-back to `gh api repos/${REPO}/check-runs/<id>/annotations` — lower detail,
-but usually enough to classify.
+The full log can run tens of KB and get truncated to a file, costing a
+second read — grep for the `##[error]` annotation lines (with context)
+first; only fall back to a raw tail if nothing matches.
+
+If the `gh run view` command itself errors (network/policy issue, not a
+real log absence), fall back to `gh api
+repos/${REPO}/check-runs/<id>/annotations` — lower detail, but usually
+enough to classify.
 
 Read the actual assertion/compiler/validator error — not just "step failed".
 For `E2E Code Quality` (eslint/prettier/tsc), `appConfigExamples coverage`,
@@ -162,7 +168,7 @@ gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only
 | `flake` | Transient infra/timing with evidence of transience (OOM, ImagePull, network, a wait that raced) AND no PR code change would prevent it. Re-run likely passes. |
 | `pre_existing` | The same failure is unrelated to this PR's diff — the PR touches nothing near the failing area, and the failure looks like it would occur on `main` too. |
 | `product_bug` | Upstream plugin source is broken (API changed, component missing) — not fixable in this repo. |
-| `config_env` | CI env problem: missing secret, expired cred, quota, `/publish` never run before `/smoketest`. |
+| `config_env` | The *run itself* was misconfigured or missing a resource: missing secret, expired cred, quota, `/publish` never run before `/smoketest`. Fixing it means re-running with the right setup, not editing repo files. |
 | `needs_human` | Genuinely ambiguous after full investigation. Say what's missing. |
 
 **`product_bug` vs `pre_existing`:** these overlap whenever a failure would
@@ -172,6 +178,15 @@ upstream plugin/image source (would be fixed by a change outside this repo);
 `pre_existing` if it's this repo's own CI/config/test code that's broken
 (would be fixed by a change inside this repo, just not by this PR). Both
 still mean "not this PR's fault."
+
+**`config_env` vs `pre_existing`:** `config_env` is for a problem with *this
+run's environment* (a one-off cause — missing secret, expired cred, quota,
+wrong command order). If the cause is a committed file in this repo that has
+drifted out of sync with something external — e.g. a workspace's
+`dynamic-plugins.yaml` still referencing a plugin path removed from the
+current RHDH image — that's `pre_existing`: the fix is a durable edit to a
+tracked file, not a rerun, and it will keep failing on every PR (including
+`main`) until someone makes that edit.
 
 **Differential rule (same as nightly triage):** a timeout is not automatically
 `flake`. If the same infrastructure worked for other checks/tests in this run,
@@ -255,9 +270,19 @@ If validation fails, read the error, fix the JSON, re-run.
 - `head_sha`: the live head SHA read in Phase 1 (not the trigger event's SHA).
 - `comment_body`: must contain both `<!-- ci-diagnose -->` and the
   `<!-- ci-diagnose-state: ... -->` marker.
-- `checks`: one entry per red curated check. Do NOT include skipped/ignored
-  checks (SonarCloud, dispatch/*).
+- `checks`: one entry per red curated check, max 30. Do NOT include
+  skipped/ignored checks (SonarCloud, dispatch/*).
 - Do NOT add keys — the schema is `additionalProperties: false`.
+
+**Length limits** (full schema:
+`.fullsend/rhdh/schemas/ci-diagnose-result.schema.json`, repo-relative to
+the sandbox workdir) — write within these the first time rather than
+discovering them from a validation failure: `summary` ≤ 2048 chars;
+`comment_body` ≤ 65536 chars; per-check `root_cause`, `evidence`,
+`suggestion` ≤ 4096 chars each; `name` ≤ 256 chars; `log_url` ≤ 2048 chars.
+`root_cause` is the only required field on a check besides `name`,
+`type`, `classification` — `evidence`/`suggestion`/`log_url` are optional,
+omit rather than pad if there's nothing substantive to add.
 
 Then print a short human-readable summary (PR #, verdict, per-check
 classification).
