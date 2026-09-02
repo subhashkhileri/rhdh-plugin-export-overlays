@@ -203,10 +203,8 @@ jobs:
 
       # App installation token so the `labeled` event actually fires (a
       # GITHUB_TOKEN label would be silently swallowed — ADR 0033).
-      # Labeling a PR (not just an issue) needs pull-requests:write in
-      # addition to issues:write, or the label API 403s on PRs even though
-      # it succeeds on plain issues (e.g. e2e-triage-agent.yaml's own
-      # gh issue edit --add-label, which never touches a PR).
+      # pull-requests:write is for labeling the PR; issues:write is for
+      # `gh label create`, which 404s without it if the label is missing.
       - name: Generate GitHub App token
         if: steps.decide.outputs.fire == 'true'
         id: app-token
