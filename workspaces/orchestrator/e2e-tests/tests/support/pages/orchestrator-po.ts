@@ -139,13 +139,19 @@ export class OrchestratorPO {
    */
   async expectEventTriggeredOrRunVisible(timeoutMs = 600_000): Promise<void> {
     const alert = ORCHESTRATOR_COMPONENTS.eventTriggeredAlert(this.page);
-    const completed = ORCHESTRATOR_COMPONENTS.completedStatus(this.page);
-    const running = ORCHESTRATOR_COMPONENTS.runningStatus(this.page);
+    // Prefer .first(): diagram nodes also render exact "Completed"/"Running" text,
+    // so a bare getByText union hits Playwright strict mode once the run is live.
+    const completed = ORCHESTRATOR_COMPONENTS.completedStatus(
+      this.page,
+    ).first();
+    const running = ORCHESTRATOR_COMPONENTS.runningStatus(this.page).first();
     // Without instanceAdminView, event-started runs redirect to Access Denied but still prove trigger.
     const accessDenied = ORCHESTRATOR_COMPONENTS.eventInstanceAccessDenied(
       this.page,
     );
-    await expect(alert.or(completed).or(running).or(accessDenied)).toBeVisible({
+    await expect(
+      alert.or(completed).or(running).or(accessDenied).first(),
+    ).toBeVisible({
       timeout: timeoutMs,
     });
   }
