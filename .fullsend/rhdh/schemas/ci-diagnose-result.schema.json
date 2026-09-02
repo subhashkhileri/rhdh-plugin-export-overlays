@@ -78,6 +78,7 @@
         },
         "suggestion": {
           "type": "string",
+          "minLength": 1,
           "maxLength": 4096,
           "description": "Concrete next step (specific file/line to change, or 're-run — transient', or 'not this PR')."
         },
@@ -86,7 +87,13 @@
           "maxLength": 2048,
           "description": "Direct link to logs (gcsweb for Prow, Actions run for GH Actions)."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "classification": { "enum": ["pr_regression", "flake"] } } },
+          "then": { "required": ["suggestion"] }
+        }
+      ]
     }
   }
 }

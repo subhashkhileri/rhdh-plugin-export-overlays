@@ -233,6 +233,25 @@ pasted verbatim — same strings, same order):
 
 Use ❌ for failures. Keep each section tight; put detail behind `<details>`.
 
+**Remediation guidelines (`pr_regression` and `flake` only).** These two
+classifications point at something actionable right now — the PR's own diff,
+or a specific instance of flakiness on this run — so `suggestion` is
+*required* for them (the schema rejects a missing or empty `suggestion` when
+`classification` is `pr_regression` or `flake`):
+
+- **`pr_regression` — be prescriptive.** Name the specific file:line and the
+  concrete change, the way you'd write review feedback. Instead of "fix the
+  timeout", write "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts`
+  line 42, increase the route wait timeout from 30s to 60s."
+- **`flake` — give the author something beyond "re-run it".** State what was
+  actually flaky (the mechanism, from Phase 2's evidence) and, if a concrete
+  change would reduce the recurrence (a longer timeout, a more specific wait
+  condition), suggest it. If no code change would help, say so explicitly and
+  recommend re-running the check — that's still a concrete suggestion, not a
+  placeholder.
+- For `pre_existing` / `product_bug` / `config_env` / `needs_human`,
+  `suggestion` remains optional — omit rather than pad.
+
 ## Phase 5: Structured Output
 
 Write `agent-result.json` and validate:
@@ -280,9 +299,11 @@ the sandbox workdir) — write within these the first time rather than
 discovering them from a validation failure: `summary` ≤ 2048 chars;
 `comment_body` ≤ 65536 chars; per-check `root_cause`, `evidence`,
 `suggestion` ≤ 4096 chars each; `name` ≤ 256 chars; `log_url` ≤ 2048 chars.
-`root_cause` is the only required field on a check besides `name`,
-`type`, `classification` — `evidence`/`suggestion`/`log_url` are optional,
-omit rather than pad if there's nothing substantive to add.
+`root_cause` is always required. `suggestion` is additionally required when
+`classification` is `pr_regression` or `flake` (see the Phase 4 remediation
+guidelines) — `evidence`/`log_url` remain optional, and `suggestion` remains
+optional for every other classification; omit optional fields rather than
+pad them if there's nothing substantive to add.
 
 Then print a short human-readable summary (PR #, verdict, per-check
 classification).
