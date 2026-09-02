@@ -135,11 +135,14 @@ echo "Result file scan passed"
 # ---------------------------------------------------------------------------
 PR_NUMBER="$(jq -r '.pr_number // empty' "${RESULT_FILE}")"
 if [[ ! "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
-  # Fall back to parsing the PR number from the trigger URL.
-  PR_NUMBER="${GITHUB_ISSUE_URL##*/}"
+  # Fall back to parsing the PR number from the trigger URL. GITHUB_ISSUE_URL
+  # is documented as optional — reference it with :- so this doesn't trip
+  # "unbound variable" under set -u when it's unset entirely.
+  PR_NUMBER="${GITHUB_ISSUE_URL:-}"
+  PR_NUMBER="${PR_NUMBER##*/}"
 fi
 if [[ ! "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
-  echo "::error::Could not resolve a numeric PR number (result=${PR_NUMBER}, url=${GITHUB_ISSUE_URL:-unset})"
+  echo "::error::Could not resolve a numeric PR number (result=$(sanitize_for_gha "${PR_NUMBER}"), url=$(sanitize_for_gha "${GITHUB_ISSUE_URL:-unset}"))"
   exit 1
 fi
 
@@ -175,7 +178,7 @@ if [[ -n "${RECORDED_HEAD}" ]]; then
   CURRENT_HEAD="$(gh api "repos/${REPO_FULL_NAME}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null || true)"
   if [[ -n "${CURRENT_HEAD}" && "${RECORDED_HEAD}" != "${CURRENT_HEAD}" ]]; then
     STALE="true"
-    echo "::warning::Analyzed head ${RECORDED_HEAD} is stale (current head ${CURRENT_HEAD}) — posting a stale notice instead"
+    echo "::warning::Analyzed head $(sanitize_for_gha "${RECORDED_HEAD}") is stale (current head $(sanitize_for_gha "${CURRENT_HEAD}")) — posting a stale notice instead"
     {
       echo "${STICKY_MARKER}"
       echo "### 🔍 CI Diagnosis"

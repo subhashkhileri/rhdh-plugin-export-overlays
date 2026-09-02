@@ -1,16 +1,13 @@
 # CI Diagnose Agent — bootstrap workflow.
 #
-# FullSend can only trigger on issue / PR / comment / label events — never on
-# CI-completion events (check_suite / status / workflow_run are hard-rejected
-# in ghaevent.go; see ADR 0033). This workflow is the bridge: it reacts to CI
-# completion, decides whether diagnose is warranted, and applies a `ci-diagnose`
-# label to the PR. The label event then routes through fullsend.yaml to the
-# ci-diagnose agent (.fullsend/rhdh/harness/ci-diagnose.yaml).
+# FullSend can't trigger on CI-completion events (check_suite/status/
+# workflow_run are hard-rejected; see ADR 0033) — only issue/PR/comment/label
+# events. This workflow bridges that: it reacts to CI completion and cycles a
+# `ci-diagnose` label, which fullsend.yaml's label trigger picks up.
 #
 # Flow:
-#   check_suite/status completes  →  this workflow
-#     ├─ resolve the PR for the event's commit
-#     ├─ skip if the commit is no longer the PR head (stale checks)
+#   check_suite/status completes → this workflow
+#     ├─ resolve the PR for the event's commit (skip forks, stale commits)
 #     ├─ compute the RED curated checks from the PR's live rollup
 #     ├─ dedup against the sticky comment's <!-- ci-diagnose-state --> marker
 #     └─ if state changed: cycle the `ci-diagnose` label (remove → add)
@@ -21,31 +18,27 @@
 #                                          ↓
 #              post-ci-diagnose.sh upserts ONE sticky diagnostic comment
 #
-# Why cycle the label (remove → add) instead of just adding it: the label may
-# already be present from a prior check completing. Re-adding an existing label
-# is a no-op that fires NO webhook, so the agent would never re-run as more
-# checks go red. Removing then re-adding guarantees a fresh `labeled` event.
+# Why cycle (remove → add) instead of just add: re-adding an already-present
+# label is a no-op — fires no webhook — so re-firing as more checks go red
+# needs a fresh `labeled` event.
 #
-# Why a GitHub App token (not GITHUB_TOKEN): writes made with GITHUB_TOKEN do
-# NOT emit webhook events (GitHub anti-recursion, ADR 0033), so a GITHUB_TOKEN
-# label would never reach fullsend.yaml. The App installation token does.
+# Why an App token, not GITHUB_TOKEN: GITHUB_TOKEN writes don't emit webhook
+# events (GitHub anti-recursion, ADR 0033), so the label would never reach
+# fullsend.yaml.
 #
-# The curated check set lives in ONE place — .fullsend/rhdh/scripts/
-# curated-check-filter.jq — checked out below and loaded with `jq -f` by both
-# this job and .fullsend/rhdh/agents/ci-diagnose.md Phase 1. The state marker
-# the agent writes is compared here to decide whether to re-fire, so both
-# sides must derive the same sorted red-name set from the same filter.
+# Curated-check membership is defined once, in .fullsend/rhdh/scripts/
+# curated-check-filter.jq, loaded here and by ci-diagnose.md Phase 1 — keeps
+# the dedup contract (this job's state vs. the agent's) from drifting apart.
 name: CI Diagnose Agent
 
 on:
-  # GitHub Actions checks (E2E Code Quality, appConfigExamples coverage,
-  # Python unit tests, smoke) surface as CheckRuns in a check_suite.
+  # GH Actions checks (E2E Code Quality, appConfigExamples coverage, Python
+  # unit tests, smoke) surface as CheckRuns in a check_suite.
   check_suite:
     types: [completed]
-  # OpenShift CI / Prow (ci/prow/*) and comment-commands (publish, smoketest)
-  # surface as commit statuses. `status` has no type filter — every status
-  # update fires this workflow; the job filters down to curated red checks and
-  # exits fast otherwise.
+  # Prow (ci/prow/*) and comment-commands (publish, smoketest) surface as
+  # commit statuses. No type filter — every status update fires this; the
+  # job below filters to curated red checks and exits fast otherwise.
   status: {}
   # Manual re-diagnose for a specific PR.
   workflow_dispatch:
@@ -55,9 +48,8 @@ on:
         required: true
         type: string
 
-# Collapse a burst of check completions for the same commit into one trigger.
-# cancel-in-progress is safe: every run recomputes the FULL live rollup, so the
-# latest run always has the most complete picture of what is red.
+# Collapse a burst of check completions for one commit into one trigger.
+# Safe to cancel-in-progress: every run recomputes the full live rollup.
 concurrency:
   group: >-
     ci-diagnose-bootstrap-${{
@@ -77,12 +69,10 @@ jobs:
   label:
     name: Evaluate CI state and label
     runs-on: ubuntu-latest
-    # Only react to failing statuses (Prow / publish / smoketest report as
-    # commit statuses). pending/success statuses are skipped to avoid a runner
-    # spin-up per green status repo-wide — a green transition is instead picked
-    # up by check_suite:completed (which fires per commit on pass OR fail and
-    # re-reads the FULL live rollup, Prow included). check_suite and
-    # workflow_dispatch always run.
+    # Only failing statuses matter (Prow/publish/smoketest report as commit
+    # statuses) — skip pending/success to avoid a runner spin-up per green
+    # status repo-wide. A green transition is instead caught by
+    # check_suite:completed, which always re-reads the full live rollup.
     if: >-
       github.event_name != 'status'
       || github.event.state == 'failure'
@@ -118,6 +108,10 @@ jobs:
 
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             PR_NUMBER="${INPUT_PR}"
+            if [[ ! "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
+              echo "::error::pr_number input must be numeric, got: ${PR_NUMBER}"
+              exit 1
+            fi
           else
             # Map the commit → its open PR in this repo.
             PR_NUMBER=$(gh api "repos/${REPO}/commits/${EVENT_SHA}/pulls" \
@@ -136,18 +130,28 @@ jobs:
             --json headRefOid,statusCheckRollup,isCrossRepository)
           HEAD_SHA=$(echo "${ROLLUP}" | jq -r '.headRefOid')
 
-          # Skip fork PRs: they run without repo secrets, so curated checks
-          # fail for reasons unrelated to the PR's code. Diagnosing them would
-          # spend a Vertex run on noise (e2e-triage never covers forks either).
+          # Fork PRs run without repo secrets, so curated checks fail for
+          # unrelated reasons — skip, unless the author is a trusted org
+          # member (OWNER/MEMBER/COLLABORATOR), the same trust tiers
+          # fullsend.yaml's own slash-command auth gate uses. A member's own
+          # fork isn't the free/unauthenticated case this guard is for.
           if [[ "$(echo "${ROLLUP}" | jq -r '.isCrossRepository')" == "true" ]]; then
-            echo "::notice::PR #${PR_NUMBER} is a fork PR — skipping"
-            echo "fire=false" >> "${GITHUB_OUTPUT}"
-            exit 0
+            AUTHOR_ASSOC=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.author_association' 2>/dev/null || echo "NONE")
+            case "${AUTHOR_ASSOC}" in
+              OWNER|MEMBER|COLLABORATOR)
+                echo "::notice::PR #${PR_NUMBER} is a fork PR by a trusted author (${AUTHOR_ASSOC}) — proceeding"
+                ;;
+              *)
+                echo "::notice::PR #${PR_NUMBER} is a fork PR by an untrusted author (${AUTHOR_ASSOC}) — skipping"
+                echo "fire=false" >> "${GITHUB_OUTPUT}"
+                exit 0
+                ;;
+            esac
           fi
 
-          # Skip stale checks: the completed check is for a commit that is no
-          # longer the PR head (a newer commit was pushed). Its own checks will
-          # fire their own events. Dispatch has no EVENT_SHA — never stale.
+          # Stale: this check belongs to a commit that's no longer the PR
+          # head — the new commit's own checks will fire their own event.
+          # Dispatch has no EVENT_SHA, so it's never stale.
           if [[ -n "${EVENT_SHA}" && "${EVENT_SHA}" != "${HEAD_SHA}" ]]; then
             echo "::notice::Event SHA ${EVENT_SHA} != head ${HEAD_SHA} — stale, skipping"
             echo "fire=false" >> "${GITHUB_OUTPUT}"
@@ -155,9 +159,7 @@ jobs:
           fi
 
           # -- Compute the sorted RED curated check names --------------------
-          # Shared filter — see .fullsend/rhdh/scripts/curated-check-filter.jq
-          # (also loaded by ci-diagnose.md Phase 1; keeps the dedup contract
-          # from silently drifting between the two consumers).
+          # Shared filter (curated-check-filter.jq) — see the file header.
           RED_NAMES=$(echo "${ROLLUP}" \
             | jq -c -f .fullsend/rhdh/scripts/curated-check-filter.jq \
             | jq -c 'map(.name // .context) | sort')
@@ -167,8 +169,10 @@ jobs:
             '{sha:$sha, red:$red}' | jq -cS .)
 
           # -- Read the previous state marker from the sticky comment --------
+          # Only trust markers from the agent's own identity — otherwise
+          # anyone with comment access could forge one to force/suppress a re-fire.
           PREV_BODY=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
-            --jq '[.[] | select(.body | contains("<!-- ci-diagnose -->"))] | last | .body // ""' 2>/dev/null || true)
+            --jq '[.[] | select(.user.login == "fullsend-ai-review[bot]" and (.body | contains("<!-- ci-diagnose -->")))] | last | .body // ""' 2>/dev/null || true)
           PREV_STATE=""
           if [[ -n "${PREV_BODY}" ]]; then
             PREV_RAW=$(printf '%s' "${PREV_BODY}" \
