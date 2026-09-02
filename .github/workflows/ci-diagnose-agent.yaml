@@ -133,8 +133,17 @@ jobs:
 
           # -- Read the PR's LIVE rollup (never trust the trigger payload) ----
           ROLLUP=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" \
-            --json headRefOid,statusCheckRollup)
+            --json headRefOid,statusCheckRollup,isCrossRepository)
           HEAD_SHA=$(echo "${ROLLUP}" | jq -r '.headRefOid')
+
+          # Skip fork PRs: they run without repo secrets, so curated checks
+          # fail for reasons unrelated to the PR's code. Diagnosing them would
+          # spend a Vertex run on noise (e2e-triage never covers forks either).
+          if [[ "$(echo "${ROLLUP}" | jq -r '.isCrossRepository')" == "true" ]]; then
+            echo "::notice::PR #${PR_NUMBER} is a fork PR — skipping"
+            echo "fire=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
 
           # Skip stale checks: the completed check is for a commit that is no
           # longer the PR head (a newer commit was pushed). Its own checks will
@@ -193,7 +202,7 @@ jobs:
       - name: Generate GitHub App token
         if: steps.decide.outputs.fire == 'true'
         id: app-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.RHDH_GITHUB_APP_ID }}
           private-key: ${{ secrets.RHDH_GITHUB_APP_PRIVATE_KEY }}

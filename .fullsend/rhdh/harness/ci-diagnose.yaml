@@ -21,8 +21,8 @@ model: opus
 image: ghcr.io/redhat-developer/rhdh-fullsend-code:latest
 policy: rhdh/policies/ci-diagnose.yaml
 
-role: diagnose
-slug: fullsend-ai-diagnose
+role: review
+slug: fullsend-ai-review
 
 # Matches a `ci-diagnose` label ADDED to a pull request (change_proposal).
 # Label-add events are authorized before any role check (auth.go), so the
