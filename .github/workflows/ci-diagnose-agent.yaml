@@ -203,6 +203,10 @@ jobs:
 
       # App installation token so the `labeled` event actually fires (a
       # GITHUB_TOKEN label would be silently swallowed — ADR 0033).
+      # Labeling a PR (not just an issue) needs pull-requests:write in
+      # addition to issues:write, or the label API 403s on PRs even though
+      # it succeeds on plain issues (e.g. e2e-triage-agent.yaml's own
+      # gh issue edit --add-label, which never touches a PR).
       - name: Generate GitHub App token
         if: steps.decide.outputs.fire == 'true'
         id: app-token
@@ -211,6 +215,7 @@ jobs:
           app-id: ${{ secrets.RHDH_GITHUB_APP_ID }}
           private-key: ${{ secrets.RHDH_GITHUB_APP_PRIVATE_KEY }}
           permission-issues: write
+          permission-pull-requests: write
 
       - name: Cycle the ci-diagnose label
         if: steps.decide.outputs.fire == 'true'
