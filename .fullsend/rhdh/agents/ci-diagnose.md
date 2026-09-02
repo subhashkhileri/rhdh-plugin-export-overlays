@@ -202,9 +202,18 @@ Roll the per-check classifications into one overall `verdict`:
 ## Phase 4: Render the sticky comment (`comment_body`)
 
 Render markdown for ONE comment. It **must** open with the sticky marker and
-**must** end with the state marker (the bootstrap reads the state marker to
-dedup; `sha` = `HEAD_SHA`, `red` = the `RED_NAMES` array computed in Phase 1,
-pasted verbatim — same strings, same order):
+**must** end with two machine-readable markers:
+
+- the **state marker** (the bootstrap reads it to dedup; `sha` = `HEAD_SHA`,
+  `red` = the `RED_NAMES` array from Phase 1, pasted verbatim — same strings,
+  same order), and
+- the **autofix-eligibility marker** (the auto-hand-off workflow reads it):
+  `sha` = `HEAD_SHA`; `fixable` = the sorted names of checks classified
+  `pr_regression` or `pre_existing` (an empty array `[]` when nothing is
+  fixable in-repo). Emit `fixable` **exactly** — a name here tells the workflow
+  to hand this check to the fix agent, so it must contain only `pr_regression`
+  and `pre_existing` names, never `flake` / `config_env` / `product_bug` /
+  `needs_human`.
 
 ```markdown
 <!-- ci-diagnose -->
@@ -227,30 +236,38 @@ pasted verbatim — same strings, same order):
 </details>
 
 ---
-<sub>Automated CI diagnosis · updates as checks complete · not a substitute for review. To hand off to the fix agent, a maintainer can comment `/fs-fix <instruction>` — see the [fix agent docs](https://github.com/fullsend-ai/fullsend/blob/main/docs/agents/fix.md).</sub>
+<sub>Automated CI diagnosis · updates as checks complete · not a substitute for review. For bot-authored PRs with in-repo–fixable failures the fix agent is dispatched automatically (up to 2 attempts). A maintainer can take over any time with `/fs-fix <instruction>`, or stop auto-fix with `/fs-fix-stop` — see the [fix agent docs](https://github.com/fullsend-ai/fullsend/blob/main/docs/agents/fix.md).</sub>
 <!-- ci-diagnose-state: {"sha":"<HEAD_SHA>","red":["appConfigExamples coverage","ci/prow/e2e-ocp-helm"]} -->
+<!-- ci-diagnose-autofix-eligible: {"sha":"<HEAD_SHA>","fixable":["appConfigExamples coverage","ci/prow/e2e-ocp-helm"]} -->
 ```
 
 Use ❌ for failures. Keep each section tight; put detail behind `<details>`.
 
-**Remediation guidelines (`pr_regression` and `flake` only).** These two
-classifications point at something actionable right now — the PR's own diff,
-or a specific instance of flakiness on this run — so `suggestion` is
+**Remediation guidelines (`pr_regression`, `pre_existing`, and `flake`).** These
+three classifications point at something actionable, so `suggestion` is
 *required* for them (the schema rejects a missing or empty `suggestion` when
-`classification` is `pr_regression` or `flake`):
+`classification` is `pr_regression`, `pre_existing`, or `flake`).
+`pr_regression` and `pre_existing` are also the **fixable-in-repo** set the
+auto-hand-off workflow acts on — a change in *this* repo would fix them — so
+their `suggestion` must be prescriptive enough to code from:
 
 - **`pr_regression` — be prescriptive.** Name the specific file:line and the
   concrete change, the way you'd write review feedback. Instead of "fix the
   timeout", write "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts`
   line 42, increase the route wait timeout from 30s to 60s."
+- **`pre_existing` — equally prescriptive.** The failure isn't this PR's fault,
+  but the fix still lives in this repo (a drifted `dynamic-plugins.yaml`, a
+  broken CI/config/test file). Name the file:line and the concrete change, the
+  same way — the fix agent will apply it inline on this PR to get it green.
 - **`flake` — give the author something beyond "re-run it".** State what was
   actually flaky (the mechanism, from Phase 2's evidence) and, if a concrete
   change would reduce the recurrence (a longer timeout, a more specific wait
   condition), suggest it. If no code change would help, say so explicitly and
   recommend re-running the check — that's still a concrete suggestion, not a
-  placeholder.
-- For `pre_existing` / `product_bug` / `config_env` / `needs_human`,
-  `suggestion` remains optional — omit rather than pad.
+  placeholder. (`flake` is **not** in the fixable set — the auto-hand-off skips
+  it; the suggestion is for the human reader.)
+- For `product_bug` / `config_env` / `needs_human`, `suggestion` remains
+  optional — omit rather than pad.
 
 ## Phase 5: Structured Output
 
@@ -287,8 +304,10 @@ If validation fails, read the error, fix the JSON, re-run.
 
 **Field rules:**
 - `head_sha`: the live head SHA read in Phase 1 (not the trigger event's SHA).
-- `comment_body`: must contain both `<!-- ci-diagnose -->` and the
-  `<!-- ci-diagnose-state: ... -->` marker.
+- `comment_body`: must contain `<!-- ci-diagnose -->`, the
+  `<!-- ci-diagnose-state: ... -->` marker, and the
+  `<!-- ci-diagnose-autofix-eligible: ... -->` marker (with `fixable` = the
+  sorted `pr_regression`/`pre_existing` check names, or `[]`).
 - `checks`: one entry per red curated check, max 30. Do NOT include
   skipped/ignored checks (SonarCloud, dispatch/*).
 - Do NOT add keys — the schema is `additionalProperties: false`.
@@ -300,10 +319,10 @@ discovering them from a validation failure: `summary` ≤ 2048 chars;
 `comment_body` ≤ 65536 chars; per-check `root_cause`, `evidence`,
 `suggestion` ≤ 4096 chars each; `name` ≤ 256 chars; `log_url` ≤ 2048 chars.
 `root_cause` is always required. `suggestion` is additionally required when
-`classification` is `pr_regression` or `flake` (see the Phase 4 remediation
-guidelines) — `evidence`/`log_url` remain optional, and `suggestion` remains
-optional for every other classification; omit optional fields rather than
-pad them if there's nothing substantive to add.
+`classification` is `pr_regression`, `pre_existing`, or `flake` (see the Phase 4
+remediation guidelines) — `evidence`/`log_url` remain optional, and `suggestion`
+remains optional for `product_bug` / `config_env` / `needs_human`; omit optional
+fields rather than pad them if there's nothing substantive to add.
 
 Then print a short human-readable summary (PR #, verdict, per-check
 classification).
@@ -312,12 +331,15 @@ classification).
 
 - **Read-only.** Do not modify files, branch, commit, push, comment, or label.
   Emit `comment_body`; the post-script posts it.
-- **Diagnosis-only — no fix hand-off, no per-check call-to-action.** The comment
-  is purely diagnostic. The ONLY fix pointer is the single `/fs-fix` docs link
-  already in the footer. Do NOT add per-check "run `/fs-fix`" prompts and do NOT
-  tailor the comment by PR author: auto-dispatching the fix agent is not
-  possible today (a bot cannot trigger it, and the fix agent does not read CI),
-  so any per-check CTA would be misleading.
+- **Diagnosis-only — you do not hand off, and the human-visible body stays
+  diagnostic.** You never post, comment, or dispatch anything yourself. The
+  hand-off is performed *outside* the sandbox by the `ci-diagnose-autofix`
+  workflow, which reads the machine-readable `ci-diagnose-autofix-eligible`
+  marker you emit — that marker is the only hand-off signal you produce. Keep
+  the human-visible prose diagnostic: do NOT add per-check "run `/fs-fix`"
+  prompts and do NOT tailor the prose by PR author. The single footer line
+  already explains the automatic hand-off and the human controls; anything more
+  is duplication.
 - **Trace inspection is mandatory for Prow UI failures** — invoke
   `/playwright-trace` and run `actions` + `action <id>` before classifying.
 - **Correlate with the diff.** Never call something `pre_existing` or `flake`

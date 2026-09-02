@@ -26,7 +26,7 @@
 | Review | **Auto-triggers on `workspaces/backstage-plugins-for-aws/` PRs.** Scoped via `paths` filter. | `/fs-review` on any PR (auth-gated) |
 | Fix | Only auto-fires from bot reviews, not from human reviews. | `/fs-fix` on a PR, `/fs-fix-stop` to disable |
 | E2E Triage | **Auto-triggers nightly.** `e2e-triage-agent.yaml` discovers failed nightly runs, creates a labeled issue → fullsend dispatch routes to `e2e-triage` agent → agent classifies failures → post-script creates per-workspace issues with `ready-to-code` → code agent picks up each issue. | Manually run `e2e-triage-agent.yaml` workflow |
-| CI Diagnose | **Auto-triggers on PR CI completion.** `ci-diagnose-agent.yaml` reacts to `check_suite`/`status` events, recomputes the live red curated-check set, and cycles the `ci-diagnose` label → fullsend dispatch routes to `ci-diagnose` agent → agent diagnoses each red check → post-script upserts one sticky comment on the PR. | `/fs-diagnose` on a PR (auth-gated), or manually run `ci-diagnose-agent.yaml` workflow with a `pr_number` input |
+| CI Diagnose | **Auto-triggers on PR CI completion.** `ci-diagnose-agent.yaml` reacts to `check_suite`/`status` events, recomputes the live red curated-check set, and cycles the `ci-diagnose` label → fullsend dispatch routes to `ci-diagnose` agent → agent diagnoses each red check → post-script upserts one sticky comment on the PR. On **bot-authored** PRs with in-repo–fixable failures, `ci-diagnose-autofix.yaml` then hands off to the fix agent automatically (see [Automated ci-diagnose → fix hand-off](#automated-ci-diagnose--fix-hand-off)). | `/fs-diagnose` on a PR (auth-gated), or manually run `ci-diagnose-agent.yaml` workflow with a `pr_number` input |
 
 ### Scope details
 
@@ -42,6 +42,62 @@ The `paths` filter (`workspaces/backstage-plugins-for-aws/**`) only applies to t
 |-------|-----|
 | Retro | Out of scope for initial pilot |
 | Prioritize | Out of scope for initial pilot |
+
+## Automated ci-diagnose → fix hand-off
+
+For **bot-authored PRs** (opened by `fullsend-ai-coder`), ci-diagnose can hand
+its diagnosis to the fix agent **automatically**, so a maintainer doesn't have
+to type `/fs-fix` by hand. This is driven by `.github/workflows/ci-diagnose-autofix.yaml`.
+
+**Flow:** the ci-diagnose agent embeds a machine-readable
+`<!-- ci-diagnose-autofix-eligible: {sha,fixable} -->` marker in its sticky
+comment → `post-ci-diagnose.sh` posts/updates that comment → the
+`issue_comment` event wakes `ci-diagnose-autofix.yaml` → if every guard passes,
+it posts `/fs-fix …` as a dedicated **machine-user** account → `fullsend.yaml`
+routes that comment to the fix stage.
+
+**Why a separate workflow (not the post-script):** the post-script runs inside
+fullsend's pinned upstream reusable workflow, whose harness env is a fixed set
+seeded upstream — there is no way to inject a repo-custom secret, and every
+token it can see is an App token (`type: Bot`), which `fullsend.yaml`'s
+`comment.user.type != 'Bot'` filter drops and whose writes emit no webhook. Only
+a workflow in **this** repo can read `${{ secrets.FS_AUTOFIX_TOKEN }}` and post
+as a real user.
+
+**Guards — all must hold, or nothing is posted:**
+
+| Guard | Rule |
+|-------|------|
+| Diagnosis comment | Triggering comment is Bot-authored and carries the `<!-- ci-diagnose -->` + eligibility markers |
+| Bot PR only | PR author is `fullsend-ai-coder[bot]` — never human PRs |
+| No forks | `head.repo == base.repo` (fork PRs are untrusted) |
+| Fixable in-repo | `fixable` marker array non-empty (≥1 `pr_regression`/`pre_existing` check) |
+| Under the cap | Fewer than **2** prior auto-fix hand-offs on this PR |
+| Not disabled | No `fullsend-no-fix` label |
+| No human takeover | No human `/fs-fix` comment already on the PR |
+| Idempotent per commit | No prior hand-off for the current head SHA |
+
+**The 2-attempt cap** is enforced by counting the workflow's own marked
+(`<!-- ci-diagnose-autofix: <sha> -->`) `/fs-fix` comments — state no agent can
+write (both agents run in read-only sandboxes). It's a lifetime count with no
+auto-reset; only a trusted human deleting the comments resets it. When the cap
+is hit, the workflow posts a one-time note and stops. The fix agent's built-in
+`FIX_ITERATION` cap still applies as a coarser backstop.
+
+**Fixable set** = `pr_regression` + `pre_existing` (a change in *this* repo would
+fix it), applied **inline** on the bot's PR. `flake` / `config_env` /
+`product_bug` / `needs_human` are **not** handed off.
+
+**Provisioning (one-time, admin):** the hand-off needs a dedicated machine-user
+(a real GitHub account, `type: User` — not an App/`[bot]`, whose comments the
+shim drops):
+
+1. Create/designate a machine-user account and add it as a **write collaborator**
+   (so the dispatcher's `/fs-fix` collaborator-permission check authorizes it).
+2. Issue a **fine-grained PAT** scoped to this repo only: `Pull requests: write`
+   + `Metadata: read`. Store it as the secret `FS_AUTOFIX_TOKEN`.
+3. Set the repo variable `FS_AUTOFIX_USER` to that account's login. If either is
+   unset, the workflow no-ops (feature off).
 
 ## Slash commands
 
@@ -154,6 +210,10 @@ gh secret list --repo redhat-developer/rhdh-plugin-export-overlays
 # Expected:
 #   Variables: FULLSEND_MINT_URL, FULLSEND_GCP_REGION
 #   Secrets:   FULLSEND_GCP_WIF_PROVIDER, FULLSEND_GCP_PROJECT_ID
+#
+# Optional (ci-diagnose → fix auto hand-off; feature no-ops if unset):
+#   Variable:  FS_AUTOFIX_USER   (machine-user login)
+#   Secret:    FS_AUTOFIX_TOKEN  (that user's fine-grained PAT)
 ```
 
 ### Grant GitHub App access
@@ -178,7 +238,7 @@ The dispatch job checks `author_association` on `issue_comment` events. Only `OW
 
 ### CODEOWNERS protection
 
-The `.fullsend/` directory, `.github/workflows/fullsend.yaml`, `.github/workflows/e2e-triage-agent.yaml`, and `.github/workflows/ci-diagnose-agent.yaml` are protected via CODEOWNERS, requiring `@redhat-developer/rhdh-cope @durandom @subhashkhileri` approval.
+The `.fullsend/` directory, `.github/workflows/fullsend.yaml`, `.github/workflows/e2e-triage-agent.yaml`, `.github/workflows/ci-diagnose-agent.yaml`, and `.github/workflows/ci-diagnose-autofix.yaml` are protected via CODEOWNERS, requiring `@redhat-developer/rhdh-cope @durandom @subhashkhileri` approval.
 
 ### Inference authentication
 
@@ -195,6 +255,7 @@ Fullsend uses GCP Workload Identity Federation (WIF) to authenticate GitHub Acti
 | `.github/workflows/fullsend.yaml` | Event shim with auth gate on slash commands |
 | `.github/workflows/e2e-triage-agent.yaml` | Nightly E2E failure discovery → creates labeled issue for triage agent |
 | `.github/workflows/ci-diagnose-agent.yaml` | PR CI-completion bridge → cycles `ci-diagnose` label for the diagnose agent |
+| `.github/workflows/ci-diagnose-autofix.yaml` | Automatic ci-diagnose → fix hand-off → posts `/fs-fix` as the machine-user on bot-authored PRs (reads `FS_AUTOFIX_TOKEN`/`FS_AUTOFIX_USER`) |
 
 ## Debugging
 

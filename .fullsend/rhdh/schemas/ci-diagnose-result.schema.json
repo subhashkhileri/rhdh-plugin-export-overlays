@@ -40,7 +40,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 65536,
-      "description": "Fully rendered markdown for the sticky PR comment. MUST contain the sticky marker '<!-- ci-diagnose -->' and the state marker '<!-- ci-diagnose-state: {\"sha\":...,\"red\":[...]} -->' so the bootstrap can dedup."
+      "description": "Fully rendered markdown for the sticky PR comment. MUST contain the sticky marker '<!-- ci-diagnose -->', the state marker '<!-- ci-diagnose-state: {\"sha\":...,\"red\":[...]} -->' so the bootstrap can dedup, and the autofix-eligibility marker '<!-- ci-diagnose-autofix-eligible: {\"sha\":...,\"fixable\":[...]} -->' the auto-hand-off workflow reads (fixable = names of pr_regression/pre_existing checks; empty array when nothing is fixable in-repo)."
     }
   },
   "$defs": {
@@ -90,7 +90,7 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "classification": { "enum": ["pr_regression", "flake"] } } },
+          "if": { "properties": { "classification": { "enum": ["pr_regression", "flake", "pre_existing"] } } },
           "then": { "required": ["suggestion"] }
         }
       ]
