@@ -621,15 +621,32 @@ EOF`;
 
 /**
  * Deploy orchestrator-demo callback-flow (SonataFlow CR `lock-flow`) for Kafka Run as Event e2e.
+ * `kafkaBootstrap` must match the broker RHDH publishes to (see configureOrchestratorKafka);
+ * upstream lock-flow-props hardcodes my-cluster-kafka-bootstrap:9092.
  */
-export async function deployLockFlowWorkflow(namespace: string): Promise<void> {
+export async function deployLockFlowWorkflow(
+  namespace: string,
+  kafkaBootstrap: string,
+): Promise<void> {
   const workflowOcDeps: WorkflowOcDeps = { runOc };
   const demoDir = `/tmp/orchestrator-demo-lock-flow-${process.pid}`;
   const manifestsDir = join(demoDir, "08_kafka_events/callback-flow/manifests");
   const workflow = "lock-flow";
+  const propsFile = join(manifestsDir, "01-configmap_lock-flow-props.yaml");
 
   try {
     await cloneOrchestratorDemo(demoDir);
+    const props = readFileSync(propsFile, "utf-8");
+    const patched = props.replace(
+      /%prod\.kafka\.bootstrap\.servers=.*/g,
+      `%prod.kafka.bootstrap.servers=${kafkaBootstrap}`,
+    );
+    if (patched === props && !props.includes(kafkaBootstrap)) {
+      throw new Error(
+        `Failed to patch lock-flow-props bootstrap to ${kafkaBootstrap}`,
+      );
+    }
+    writeFileSync(propsFile, patched, "utf-8");
     await $`oc apply -n ${namespace} -f ${manifestsDir}`;
 
     patchWorkflowPostgres(namespace, workflow);

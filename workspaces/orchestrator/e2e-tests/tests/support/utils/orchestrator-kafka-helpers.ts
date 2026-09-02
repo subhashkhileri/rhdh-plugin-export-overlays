@@ -94,6 +94,24 @@ export async function patchAppConfigKafka(
     orchRaw && typeof orchRaw === "object" && !Array.isArray(orchRaw)
       ? (orchRaw as Record<string, unknown>)
       : {};
+  const existingKafka =
+    orch.kafka && typeof orch.kafka === "object" && !Array.isArray(orch.kafka)
+      ? (orch.kafka as Record<string, unknown>)
+      : undefined;
+  const existingBrokers = Array.isArray(existingKafka?.brokers)
+    ? (existingKafka.brokers as unknown[])
+    : [];
+  if (
+    existingKafka?.clientId === "orchestratorKafka" &&
+    existingBrokers.length === 1 &&
+    existingBrokers[0] === bootstrap
+  ) {
+    console.warn(
+      `[configureOrchestratorKafka] app-config already has brokers=[${bootstrap}]; skipping restart`,
+    );
+    return;
+  }
+
   orch.kafka = {
     clientId: "orchestratorKafka",
     brokers: [bootstrap],
@@ -173,7 +191,50 @@ async function restartRhdhScaleZeroOne(namespace: string): Promise<void> {
     ],
     620_000,
   );
-  await sleep(5_000);
+  // Pod Ready is not enough — RBAC routes can 404 for a bit after restart.
+  await waitForRhdhPermissionApiReady();
+}
+
+/**
+ * Poll until POST-able RBAC routes are mounted (401/403 without a token is OK;
+ * 404 means the permission backend is not serving yet).
+ */
+async function waitForRhdhPermissionApiReady(
+  timeoutMs = 180_000,
+): Promise<void> {
+  const baseUrl = process.env.RHDH_BASE_URL?.replace(/\/$/, "");
+  if (!baseUrl) {
+    console.warn(
+      "[configureOrchestratorKafka] RHDH_BASE_URL unset; sleeping 15s after rollout",
+    );
+    await sleep(15_000);
+    return;
+  }
+  const url = `${baseUrl}/api/permission/roles`;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { method: "GET", redirect: "manual" });
+      // Route exists once we get anything other than 404/502/503.
+      if (![404, 502, 503].includes(res.status)) {
+        console.warn(
+          `[configureOrchestratorKafka] Permission API ready (HTTP ${res.status})`,
+        );
+        return;
+      }
+      console.warn(
+        `[configureOrchestratorKafka] Waiting for permission API (HTTP ${res.status})`,
+      );
+    } catch (err) {
+      console.warn(
+        `[configureOrchestratorKafka] Waiting for permission API: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    await sleep(5_000);
+  }
+  throw new Error(
+    `Timed out waiting for RHDH permission API at ${url} after ${timeoutMs}ms`,
+  );
 }
 
 /**

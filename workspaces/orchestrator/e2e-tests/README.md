@@ -9,7 +9,7 @@ L4b coverage for cloud-event workflow execution ([RHIDP-16050](https://redhat.at
 1. Installs a small Streams for Apache Kafka cluster (1 broker + 1 controller, RF=1) in the e2e namespace
 2. Patches RHDH `app-config-rhdh` with `orchestrator.kafka` and restarts RHDH (scale 0→1)
 3. Deploys `lock-flow` from [orchestrator-demo `08_kafka_events/callback-flow`](https://github.com/rhdhorchestrator/orchestrator-demo/tree/main/08_kafka_events/callback-flow)
-4. Asserts UI **Run as Event** triggers the workflow (event alert and/or Running/Completed)
+4. Asserts UI **Run as Event** produces a live run (**Running** or **Completed**)
 
 ### How to run locally (simulate nightly)
 
@@ -37,3 +37,4 @@ yarn test:kafka
 | `E2E_NIGHTLY_MODE=true`         | Enable Kafka Run as Event suite (set automatically in nightly CI)                                                                        |
 | `SKIP_ORCHESTRATOR_DEPLOY=true` | Skip SonataFlow/Loki/RHDH redeploy (local/dev on an already-live substrate). Requires `RHDH_BASE_URL` (errors if unset). Not used in CI. |
 | `DEMO_WORKFLOW_REPO_REF`        | Pin `orchestrator-demo` clone (branch/tag/SHA) for lock-flow and token-propagation; unset uses default-branch tip                        |
+| `KAFKA_CLUSTER_NAME`            | Kafka CR name (default `my-cluster`). RHDH brokers and lock-flow props are patched to the same bootstrap                                 |

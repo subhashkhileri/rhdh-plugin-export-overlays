@@ -55,8 +55,8 @@ export function registerOrchestratorKafkaTests(): void {
         `orchestrator-kafka-setup-${testInfo.project.name}`,
         async () => {
           const namespace = rhdh.deploymentConfig.namespace;
-          await configureOrchestratorKafka(namespace);
-          await deployLockFlowWorkflow(namespace);
+          const bootstrap = await configureOrchestratorKafka(namespace);
+          await deployLockFlowWorkflow(namespace, bootstrap);
         },
       );
 

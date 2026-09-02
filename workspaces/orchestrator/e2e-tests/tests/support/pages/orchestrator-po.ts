@@ -135,23 +135,18 @@ export class OrchestratorPO {
   }
 
   /**
-   * After Run as Event: accept either kafkaEvent redirect alert or a visible run status.
+   * After Run as Event: wait for a live run status only.
+   * The pre-run alert only proves RHDH accepted the request; Access Denied is an
+   * RBAC failure (this suite grants instanceAdminView) and must not pass.
    */
-  async expectEventTriggeredOrRunVisible(timeoutMs = 600_000): Promise<void> {
-    const alert = ORCHESTRATOR_COMPONENTS.eventTriggeredAlert(this.page);
+  async expectEventTriggeredOrRunVisible(timeoutMs = 300_000): Promise<void> {
     // Prefer .first(): diagram nodes also render exact "Completed"/"Running" text,
     // so a bare getByText union hits Playwright strict mode once the run is live.
     const completed = ORCHESTRATOR_COMPONENTS.completedStatus(
       this.page,
     ).first();
     const running = ORCHESTRATOR_COMPONENTS.runningStatus(this.page).first();
-    // Without instanceAdminView, event-started runs redirect to Access Denied but still prove trigger.
-    const accessDenied = ORCHESTRATOR_COMPONENTS.eventInstanceAccessDenied(
-      this.page,
-    );
-    await expect(
-      alert.or(completed).or(running).or(accessDenied).first(),
-    ).toBeVisible({
+    await expect(completed.or(running).first()).toBeVisible({
       timeout: timeoutMs,
     });
   }
@@ -160,7 +155,9 @@ export class OrchestratorPO {
     await this.openLockFlowWorkflowFromSidebar();
     await this.runWorkflowInDetailsPage();
     await this.clickRunAsEvent();
-    await this.expectEventTriggeredOrRunVisible();
+    // Keep assertion budget under the 600s test timeout so failures surface as
+    // locator errors instead of generic "Test timeout exceeded".
+    await this.expectEventTriggeredOrRunVisible(300_000);
   }
 
   async runGreetingWorkflow(

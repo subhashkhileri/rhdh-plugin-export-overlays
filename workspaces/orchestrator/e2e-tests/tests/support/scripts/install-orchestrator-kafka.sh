@@ -6,7 +6,9 @@
 #
 # Environment:
 #   KAFKA_NAMESPACE           Target namespace (default: current oc project, else orchestrator)
-#   KAFKA_CLUSTER_NAME        Kafka CR name (default: my-cluster)
+#   KAFKA_CLUSTER_NAME        Kafka CR name (default: my-cluster). Callers that
+#                            change this must also patch lock-flow props to the
+#                            same bootstrap (deployLockFlowWorkflow does that).
 #   KAFKA_WAIT_TIMEOUT        Kafka Ready wait seconds (default: 600)
 #   KAFKA_OPERATOR_WAIT_TIMEOUT  Subscription/CSV wait seconds (default: 900)
 #   KAFKA_SUBSCRIPTION_NAME   Subscription name (default: amq-streams)
@@ -91,13 +93,6 @@ EOF
 ensure_subscription() {
   if oc get "${OLM_SUB}" "${SUB_NAME}" -n "${KAFKA_NS}" &>/dev/null; then
     log "OLM Subscription ${SUB_NAME} already exists"
-  elif oc get csv -A --no-headers 2>/dev/null | grep -qi 'amqstreams\|amq-streams'; then
-    log "AMQ Streams / Kafka operator CSV already installed; ensuring local Subscription still"
-    # Still create a namespaced Subscription when missing — cluster CSV copies
-    # (e.g. from a previous install) do not guarantee a running operator here.
-    if ! oc get "${OLM_SUB}" "${SUB_NAME}" -n "${KAFKA_NS}" &>/dev/null; then
-      create_subscription
-    fi
   else
     create_subscription
   fi
