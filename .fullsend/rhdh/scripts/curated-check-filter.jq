@@ -13,7 +13,12 @@
 # CURATED_MODE (env var) picks the output; unset keeps the classic red set, so
 # existing callers are unaffected:
 #   unset / other  → curated checks that are RED (finished & failing)
-#   "settling"     → curated checks that are still PENDING or running
+#   "settling"     → curated checks that are ACTIVELY running and will finish on
+#                    their own. This deliberately EXCLUDES checks that are only
+#                    waiting for a manual trigger/approval (StatusContext
+#                    EXPECTED, CheckRun WAITING) and checks not reported at all —
+#                    the bootstrap must not block a diagnosis forever on
+#                    something a human has to kick off.
 #
 # ─── To change what ci-diagnose watches, edit ONLY this block ───────────────
 def curated:
@@ -26,10 +31,16 @@ def curated:
     checkrun_names:   ["E2E Code Quality", "appConfigExamples coverage",
                        "Python unit tests", "smoke"],
 
-    # Which states count as "red" (failed) vs "settling" (not finished):
+    # Which states count as "red" (finished & failing):
     red_states:       ["FAILURE", "ERROR"],                        # StatusContext.state
     red_conclusions:  ["FAILURE", "TIMED_OUT", "ACTION_REQUIRED"], # CheckRun.conclusion
-    settling_states:  ["PENDING", "EXPECTED"],                     # StatusContext.state
+
+    # Which states count as "actively running" (diagnosis waits for these).
+    # NOTE: EXPECTED (StatusContext) and WAITING (CheckRun) are intentionally
+    # absent — those mean "awaiting a manual trigger/approval", which we do NOT
+    # wait for. See the CURATED_MODE note in the header.
+    running_states:   ["PENDING"],                                       # StatusContext.state
+    running_statuses: ["QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED"], # CheckRun.status
   };
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -53,10 +64,11 @@ def is_red:
   else false
   end;
 
-# Is it still pending / running (not settled yet)?
+# Is it actively running (will finish on its own, so diagnosis should wait)?
+# Checks awaiting a manual trigger/approval are NOT "settling" — see header.
 def is_settling:
-  if   .__typename == "StatusContext" then .state | IN(curated.settling_states[])
-  elif .__typename == "CheckRun"      then (.status != null and .status != "COMPLETED")
+  if   .__typename == "StatusContext" then .state | IN(curated.running_states[])
+  elif .__typename == "CheckRun"      then .status | IN(curated.running_statuses[])
   else false
   end;
 
