@@ -1,48 +1,67 @@
-# Shared curated-check filter for ci-diagnose.
+# Shared curated-check filter for ci-diagnose — the SINGLE SOURCE OF TRUTH for
+# which of a PR's checks ci-diagnose looks at.
 #
-# Selects the entries from a PR's `statusCheckRollup` (as returned by
-# `gh pr view --json statusCheckRollup`) that belong to the curated,
-# diagnosable check set — everything else (SonarCloud, fullsend dispatch/*,
-# etc.) is ignored.
+# Input : a PR rollup from `gh pr view --json statusCheckRollup`.
+# Output: the curated checks in a given state (see CURATED_MODE below).
+#         Everything non-curated (SonarCloud, fullsend dispatch/*, …) is dropped.
 #
-# This file is the SINGLE SOURCE OF TRUTH for that membership test. It is
-# loaded with `jq -f` by both:
-#   - .fullsend/rhdh/agents/ci-diagnose.md (Phase 1)
-#   - .github/workflows/ci-diagnose-agent.yaml (red-set / dedup computation)
+# Loaded with `jq -f` by both consumers, which MUST agree on the red set or the
+# dedup contract breaks:
+#   - .fullsend/rhdh/agents/ci-diagnose.md      (Phase 1)
+#   - .github/workflows/ci-diagnose-agent.yaml  (red-set / dedup / settle-gate)
 #
-# Both consumers must derive the same sorted set of red check names from the
-# same rollup, or the bootstrap workflow and the agent's state marker will
-# disagree about when to (re-)fire (see the dedup contract in both files).
-# Edit the check names/types here ONLY — do not fork this predicate.
+# CURATED_MODE (env var) picks the output; unset keeps the classic red set, so
+# existing callers are unaffected:
+#   unset / other  → curated checks that are RED (finished & failing)
+#   "settling"     → curated checks that are still PENDING or running
 #
-# Output modes (selected via the CURATED_MODE env var, so existing `jq -f`
-# callers that set nothing keep getting the red set unchanged):
-#   unset / anything else  → the curated checks that are currently RED
-#   "settling"             → the curated checks that are still PENDING/running
-# The bootstrap uses "settling" to hold off diagnosing until every curated
-# check has finished, so it diagnoses once with the complete picture.
+# ─── To change what ci-diagnose watches, edit ONLY this block ───────────────
+def curated:
+  {
+    # Commit statuses (Prow, comment-commands), matched on their context:
+    status_prefixes:  ["ci/prow/"],           # matched by prefix
+    status_names:     ["publish", "smoketest"],
 
-# Membership in the curated, diagnosable check set — independent of state.
-def is_curated_check:
-  ((.__typename == "StatusContext") and (.context | startswith("ci/prow/")))
-  or ((.__typename == "StatusContext") and (.context | IN("publish", "smoketest")))
-  or ((.__typename == "CheckRun") and (.name | IN("E2E Code Quality", "appConfigExamples coverage", "Python unit tests", "smoke")));
+    # GitHub Actions checks, matched on their name:
+    checkrun_names:   ["E2E Code Quality", "appConfigExamples coverage",
+                       "Python unit tests", "smoke"],
 
-# A finished-and-failing check.
-def is_red_state:
-  ((.__typename == "StatusContext") and (.state | IN("FAILURE", "ERROR")))
-  or ((.__typename == "CheckRun") and (.conclusion | IN("FAILURE", "TIMED_OUT", "ACTION_REQUIRED")));
+    # Which states count as "red" (failed) vs "settling" (not finished):
+    red_states:       ["FAILURE", "ERROR"],                        # StatusContext.state
+    red_conclusions:  ["FAILURE", "TIMED_OUT", "ACTION_REQUIRED"], # CheckRun.conclusion
+    settling_states:  ["PENDING", "EXPECTED"],                     # StatusContext.state
+  };
+# ────────────────────────────────────────────────────────────────────────────
 
-# A check that has not settled yet (pending status, or a non-COMPLETED run).
-def is_settling_state:
-  ((.__typename == "StatusContext") and (.state | IN("PENDING", "EXPECTED")))
-  or ((.__typename == "CheckRun") and (.status != null) and (.status != "COMPLETED"));
+# Is this rollup entry one of the curated checks (regardless of state)?
+def is_curated:
+  if   .__typename == "StatusContext" then
+         # `// ""` guards a null/absent context: treat it as non-curated rather
+         # than crashing startswith() and failing the whole bootstrap step.
+         (.context // "") as $ctx
+         | (curated.status_prefixes | any(. as $p | $ctx | startswith($p)))
+           or ($ctx | IN(curated.status_names[]))
+  elif .__typename == "CheckRun" then
+         .name | IN(curated.checkrun_names[])
+  else false
+  end;
 
-def is_curated_red: is_curated_check and is_red_state;
-def is_curated_settling: is_curated_check and is_settling_state;
+# Has it finished and failed?
+def is_red:
+  if   .__typename == "StatusContext" then .state | IN(curated.red_states[])
+  elif .__typename == "CheckRun"      then .conclusion | IN(curated.red_conclusions[])
+  else false
+  end;
+
+# Is it still pending / running (not settled yet)?
+def is_settling:
+  if   .__typename == "StatusContext" then .state | IN(curated.settling_states[])
+  elif .__typename == "CheckRun"      then (.status != null and .status != "COMPLETED")
+  else false
+  end;
 
 .statusCheckRollup
-| if (env.CURATED_MODE == "settling")
-  then map(select(is_curated_settling))
-  else map(select(is_curated_red))
+| if env.CURATED_MODE == "settling"
+  then map(select(is_curated and is_settling))
+  else map(select(is_curated and is_red))
   end
