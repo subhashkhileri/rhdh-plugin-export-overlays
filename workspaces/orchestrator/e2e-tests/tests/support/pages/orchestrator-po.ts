@@ -139,7 +139,7 @@ export class OrchestratorPO {
    * The pre-run alert only proves RHDH accepted the request; Access Denied is an
    * RBAC failure (this suite grants instanceAdminView) and must not pass.
    */
-  async expectEventTriggeredOrRunVisible(timeoutMs = 300_000): Promise<void> {
+  async verifyEventTriggeredOrRunVisible(timeoutMs = 300_000): Promise<void> {
     // Prefer .first(): diagram nodes also render exact "Completed"/"Running" text,
     // so a bare getByText union hits Playwright strict mode once the run is live.
     const completed = ORCHESTRATOR_COMPONENTS.completedStatus(
@@ -157,7 +157,7 @@ export class OrchestratorPO {
     await this.clickRunAsEvent();
     // Keep assertion budget under the 600s test timeout so failures surface as
     // locator errors instead of generic "Test timeout exceeded".
-    await this.expectEventTriggeredOrRunVisible(300_000);
+    await this.verifyEventTriggeredOrRunVisible(300_000);
   }
 
   async runGreetingWorkflow(

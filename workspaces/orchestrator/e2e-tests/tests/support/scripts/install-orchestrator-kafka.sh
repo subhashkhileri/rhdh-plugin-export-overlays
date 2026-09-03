@@ -193,17 +193,17 @@ EOF
 
 wait_kafka_ready() {
   log "Waiting for Kafka/${CLUSTER_NAME} Ready (timeout ${WAIT_TIMEOUT}s)"
+  local deadline=$((SECONDS + WAIT_TIMEOUT))
   if oc wait -n "${KAFKA_NS}" "kafka/${CLUSTER_NAME}" --for=condition=Ready --timeout="${WAIT_TIMEOUT}s"; then
     return 0
   fi
   # Some operator versions expose Ready differently; fall back to status poll.
-  local elapsed=0 interval=15
-  while [[ "${elapsed}" -lt "${WAIT_TIMEOUT}" ]]; do
+  local interval=15
+  while [[ "${SECONDS}" -lt "${deadline}" ]]; do
     if kafka_ready; then
       return 0
     fi
     sleep "${interval}"
-    elapsed=$((elapsed + interval))
   done
   log "Timed out waiting for Kafka Ready"
   oc get kafka,kafkanodepool,pods -n "${KAFKA_NS}" -l "strimzi.io/cluster=${CLUSTER_NAME}" >&2 || true

@@ -29,6 +29,11 @@ async function runKafkaInstallScript(
     maxBuffer: 32 * 1024 * 1024,
     env: process.env,
   });
+  if (result.error) {
+    throw new Error(
+      `install-orchestrator-kafka.sh failed: ${result.error.message}`,
+    );
+  }
   return {
     exitCode: result.status ?? 1,
     stdout: result.stdout ?? "",
@@ -126,22 +131,26 @@ export async function patchAppConfigKafka(
 
   const tmpDir = mkdtempSync(join(tmpdir(), "orch-kafka-appconfig-"));
   const outFile = join(tmpDir, "app-config-out.yaml");
+  const manifestFile = join(tmpDir, "configmap.yaml");
   try {
     writeFileSync(outFile, merged, "utf-8");
 
-    const apply = spawnSync(
-      "bash",
+    const manifest = runOc(
       [
-        "-c",
-        `oc create configmap ${APP_CONFIG_CM} -n ${namespace} --from-file=${APP_CONFIG_KEY}=${outFile} --dry-run=client -o yaml | oc apply -f -`,
+        "-n",
+        namespace,
+        "create",
+        "configmap",
+        APP_CONFIG_CM,
+        `--from-file=${APP_CONFIG_KEY}=${outFile}`,
+        "--dry-run=client",
+        "-o",
+        "yaml",
       ],
-      { encoding: "utf-8" },
+      120_000,
     );
-    if (apply.status !== 0) {
-      throw new Error(
-        `Failed to apply ${APP_CONFIG_CM}: ${apply.stderr || apply.stdout}`,
-      );
-    }
+    writeFileSync(manifestFile, manifest, "utf-8");
+    runOc(["-n", namespace, "apply", "-f", manifestFile], 120_000);
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }

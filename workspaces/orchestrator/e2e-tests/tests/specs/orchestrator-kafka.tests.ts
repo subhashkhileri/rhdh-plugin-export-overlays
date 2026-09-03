@@ -1,8 +1,8 @@
 import { test } from "@red-hat-developer-hub/e2e-test-utils/test";
-import { OrchestratorPO } from "../support/pages/orchestrator-po.js";
 import {
   PRIMARY_USER,
   configureOrchestratorKafka,
+  createOrchestratorPO,
   createRoleWithPolicies,
   deleteRoleAndPolicies,
   deployLockFlowWorkflow,
@@ -76,7 +76,7 @@ export function registerOrchestratorKafkaTests(): void {
       }
     });
 
-    // Assertions live in OrchestratorPO.runLockFlowAsEvent / expectEventTriggeredOrRunVisible.
+    // Assertions live in OrchestratorPO.runLockFlowAsEvent / verifyEventTriggeredOrRunVisible.
     // eslint-disable-next-line playwright/expect-expect
     test("Run lock-flow as Event and verify trigger", async ({
       page,
@@ -84,7 +84,7 @@ export function registerOrchestratorKafkaTests(): void {
       uiHelper,
     }, testInfo) => {
       test.setTimeout(600_000);
-      const orchestratorPo = new OrchestratorPO(page, uiHelper);
+      const orchestratorPo = createOrchestratorPO(page, uiHelper);
       await loginHelper.loginAsKeycloakUser();
       await ensureDataIndexOrSkip(testInfo.project.name, test);
       await orchestratorPo.runLockFlowAsEvent();
