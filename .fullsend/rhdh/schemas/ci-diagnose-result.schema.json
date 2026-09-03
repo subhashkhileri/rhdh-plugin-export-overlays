@@ -40,7 +40,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 65536,
-      "description": "Fully rendered markdown for the sticky PR comment. MUST contain the sticky marker '<!-- ci-diagnose -->', the state marker '<!-- ci-diagnose-state: {\"sha\":...,\"red\":[...]} -->' so the bootstrap can dedup, and the autofix-eligibility marker '<!-- ci-diagnose-autofix-eligible: {\"sha\":...,\"fixable\":[...]} -->' the auto-hand-off workflow reads (fixable = names of pr_regression/pre_existing checks; empty array when nothing is fixable in-repo)."
+      "description": "Fully rendered markdown for the sticky PR comment. MUST contain the sticky marker '<!-- ci-diagnose -->' and the state marker '<!-- ci-diagnose-state: {\"sha\":...,\"red\":[...]} -->' so the bootstrap can dedup. The post-script reads agent-result.json (not this body) to decide whether to request-changes. pre_existing checks must name any related open PRs in the human-readable body."
     }
   },
   "$defs": {
@@ -86,6 +86,31 @@
           "type": "string",
           "maxLength": 2048,
           "description": "Direct link to logs (gcsweb for Prow, Actions run for GH Actions)."
+        },
+        "related_prs": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["number", "url"],
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 256
+              }
+            }
+          },
+          "description": "Open PRs other than the diagnosed PR that appear to already address this failure. Any author (human or bot). Populate for pre_existing after searching open PRs; omit the key when none found (do not emit an empty array)."
         }
       },
       "allOf": [

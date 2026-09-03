@@ -17,6 +17,7 @@
 #              CEL trigger matches → ci-diagnose agent runs (read-only)
 #                                          ↓
 #              post-ci-diagnose.sh upserts ONE sticky diagnostic comment
+#              and may request-changes (review App) so the fix agent runs
 #
 # Why cycle (remove → add) instead of just add: re-adding an already-present
 # label is a no-op — fires no webhook — so re-firing as more checks go red
