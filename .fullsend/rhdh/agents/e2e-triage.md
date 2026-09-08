@@ -231,16 +231,15 @@ and dedup results.
 
 ### Umbrella rule
 
-When ≥3 workspaces share the same `root_cause_slug`, emit **ONE entry**
-in the `workspaces` array — not one per workspace. **Do NOT emit separate
-entries for sibling workspaces.** The code agent reads this single issue
-and fixes all workspaces in one branch/PR. For ≤2 workspaces with the
-same cause, use per-workspace issues (each triggers its own coder run).
+When ≥3 workspaces share the same `root_cause_slug`, the merge script
+automatically combines them into one entry. **Write per-workspace
+results as normal** — do not manually merge them. The merge script
+handles umbrella grouping, including combining tests, picking the
+dominant `fix_category`, and merging issue bodies.
 
-Umbrella entries use:
-- `workspace`: the `root_cause_slug` (not a directory name)
-- `tests`: combined from all affected workspaces
-- `issue.title`: `[fullsend] E2E: <root-cause-slug> — <short description>`
+For umbrella entries, each per-workspace issue body should still follow
+the standard template. The merge script concatenates them under the
+shared slug.
 
 ### Issue body template
 
@@ -300,73 +299,85 @@ For umbrella issues, the sections from `## <workspace>` through
 
 ## Phase 5: Structured Output
 
-After processing all workspaces, write the results to `agent-result.json`:
+Process each workspace incrementally — classify, dedup, then write
+immediately. Do not wait until all workspaces are done.
+
+Before writing the first result, clear any stale output from a prior
+run of this agent in the same sandbox (e.g. a retried iteration) —
+otherwise the merge script will pick up leftover files from a
+workspace that isn't part of this run and error on the duplicate, or
+silently include stale results:
 
 ```bash
 OUTPUT_DIR="${FULLSEND_OUTPUT_DIR:-.}"
-mkdir -p "$OUTPUT_DIR"
-cat > "$OUTPUT_DIR/agent-result.json" << 'RESULT_EOF'
-{
-  "target_branch": "<TARGET_BRANCH>",
-  "workspaces": [
-    {
-      "workspace": "<name>",
-      "fix_category": "<infra_flake|test_fix|product_bug|environment>",
-      "tests": [
-        { "name": "<test title>", "error": "<error message>" }
-      ],
-      "root_cause": "<summary>",
-      "root_cause_slug": "<slug>",
-      "issue": {
-        "action": "<create|comment|skip>",
-        "title": "<for create only>",
-        "labels": ["e2e-failure", "ready-to-code"],
-        "body": "<issue body or comment body>",
-        "number": "<for comment only — integer, not null>",
-        "cycle_ready_to_code": false
-      }
-    }
-  ],
-  "summary": "<human-readable summary of all classifications>"
-}
-RESULT_EOF
+rm -rf "$OUTPUT_DIR/workspace-results"
+mkdir -p "$OUTPUT_DIR/workspace-results"
 ```
 
-**After writing the file, validate it:**
+### Per-workspace output
+
+After completing Phases 2–4 for each workspace, write its result:
+
+```bash
+cat > "$OUTPUT_DIR/workspace-results/<workspace>.json" << 'WS_EOF'
+{
+  "workspace": "<name>",
+  "fix_category": "<infra_flake|test_fix|product_bug|environment>",
+  "tests": [
+    { "name": "<test title>", "error": "<error message>" }
+  ],
+  "root_cause": "<summary>",
+  "root_cause_slug": "<slug>",
+  "issue": {
+    "action": "<create|comment|skip>",
+    "title": "<for create only>",
+    "labels": ["e2e-failure", "ready-to-code"],
+    "body": "<issue body or comment body>",
+    "number": <for comment only — integer, not null>,
+    "cycle_ready_to_code": false
+  }
+}
+WS_EOF
+```
+
+Write one file per workspace. For `infra_flake` workspaces (no issue),
+omit the `issue` field or set `action: "skip"`.
+
+**Field rules:**
+- `workspace`: directory name (not slug — the merge script handles umbrella grouping)
+- `root_cause_slug`: short kebab-case slug (e.g., `route-wait`)
+- `issue.action`: `"create"` | `"comment"` | `"skip"` (from Phase 3 dedup)
+- `issue.number`: required for `"comment"` action (integer, not string)
+- `issue.cycle_ready_to_code`: `true` when issue exists but has no open PR
+- Do NOT include extra keys — the schema enforces `additionalProperties: false`
+
+### Merge and validate
+
+After ALL workspaces are written, run the merge script:
+
+```bash
+SKILL_DIR="${SKILL_DIR:-.claude/skills/e2e-failure-analysis}"
+node --experimental-strip-types "$SKILL_DIR/scripts/merge-results.ts" \
+  --target-branch "$TARGET_BRANCH" \
+  --output "$OUTPUT_DIR/agent-result.json" \
+  "$OUTPUT_DIR/workspace-results"
+```
+
+The merge script:
+- Combines all workspace results into the final `agent-result.json`
+- Applies the umbrella rule (≥3 workspaces with same `root_cause_slug`
+  → merged into one entry)
+- Generates the human-readable summary
+- Validates against the schema
+
+Then run the fullsend validator:
 
 ```bash
 fullsend-check-output "$OUTPUT_DIR/agent-result.json"
 ```
 
-If validation fails, read the error output, fix the JSON, and re-run.
-
-**Field rules:**
-- `target_branch`: the branch detected from the Prow URL
-- `workspace`: directory name, or `root_cause_slug` for umbrella entries
-  (see Phase 4 umbrella rule)
-- `root_cause_slug`: short kebab-case slug (e.g., `route-wait`)
-- `issue.action`: `"create"` | `"comment"` | `"skip"` (from Phase 3 dedup)
-- `issue.cycle_ready_to_code`: `true` when issue exists but has no open PR
-- Do NOT include extra keys — the schema enforces `additionalProperties: false`
-
-After writing and validating, output a human-readable summary:
-
-```
-=== E2E Triage Results ===
-Workspaces classified: <N>
-
-  [argocd]
-    Category:  test_fix
-    Slug:      route-wait
-    Tests:     1
-    Action:    create
-
-  [orchestrator]
-    Category:  infra_flake
-    Slug:      ocp-timeout
-    Tests:     3
-    Action:    skip
-```
+If validation fails, read the error, fix the workspace JSON that caused
+it, and re-run the merge.
 
 ---
 
