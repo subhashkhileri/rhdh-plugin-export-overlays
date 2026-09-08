@@ -36,7 +36,6 @@ host_files:
 
 skills:
   - skills/e2e-failure-analysis
-  - skills/playwright-trace
 
 post_script: rhdh/scripts/post-e2e-triage.sh
 
