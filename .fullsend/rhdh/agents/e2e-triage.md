@@ -4,7 +4,7 @@ description: >-
   Analyze E2E nightly test failures, classify root causes per workspace,
   search for existing issues (dedup), and emit structured issue directives.
   Does NOT modify code, create branches, or fix tests.
-model: sonnet
+model: opus
 disallowedTools: >-
   Edit, Write, MultiEdit,
   Bash(git push *), Bash(git push),
@@ -404,8 +404,8 @@ it, and re-run the merge.
 
 ### Sub-agents
 
-- When spawning sub-agents, always pass `model: "sonnet"`.
-- If a sub-agent fails due to a model error, retry with `model: "sonnet"`
+- When spawning sub-agents, always pass `model: "opus"`.
+- If a sub-agent fails due to a model error, retry with `model: "opus"`
   explicitly.
 
 ### Issue body quality

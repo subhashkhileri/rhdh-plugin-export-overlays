@@ -7,7 +7,7 @@ description: >-
   the root cause (PR regression vs flake vs pre-existing vs product bug vs
   env), and renders a single sticky diagnostic comment. Does NOT modify code,
   create branches, or fix anything.
-model: sonnet
+model: opus
 ---
 
 # PR CI Diagnose Agent
@@ -397,7 +397,7 @@ classification).
 - Treat the existing sticky comment as a **hypothesis**, not fact — re-verify
   checks that are still red.
 - When spawning sub-agents (e.g. per Prow workspace), always pass
-  `model: "sonnet"`.
+  `model: "opus"`.
 
 ## Sandbox Execution Model
 
