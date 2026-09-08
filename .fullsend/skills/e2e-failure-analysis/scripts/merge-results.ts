@@ -2,11 +2,13 @@
 // merge-results.ts — Combine per-workspace JSON results into agent-result.json
 // Usage: node --experimental-strip-types merge-results.ts --target-branch <branch> --output <path> <workspace-results-dir>
 
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const FIX_CATEGORIES = ["infra_flake", "test_fix", "product_bug", "environment"] as const;
 type FixCategory = (typeof FIX_CATEGORIES)[number];
+const VALID_CATEGORIES = new Set<string>(FIX_CATEGORIES);
+const VALID_ACTIONS = new Set(["create", "comment", "skip"]);
 
 interface Test {
   name: string;
@@ -37,62 +39,73 @@ interface AgentResult {
   summary: string;
 }
 
-// --- Argument parsing ---
-const args = process.argv.slice(2);
-let targetBranch = "";
-let outputPath = "";
-let inputDir = "";
-
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--target-branch" && args[i + 1]) {
-    targetBranch = args[++i];
-  } else if (args[i] === "--output" && args[i + 1]) {
-    outputPath = args[++i];
-  } else if (!args[i].startsWith("--")) {
-    inputDir = args[i];
-  }
-}
-
-if (!targetBranch || !outputPath || !inputDir) {
-  console.error("Usage: merge-results.ts --target-branch <branch> --output <path> <workspace-results-dir>");
-  process.exit(1);
-}
-
-// --- Read workspace results ---
-const files = fs.readdirSync(inputDir).filter((f) => f.endsWith(".json")).sort();
-if (files.length === 0) {
-  console.error(`No .json files found in ${inputDir}`);
-  process.exit(1);
-}
-
-const workspaces: WorkspaceResult[] = files.map((f) => {
-  const raw = fs.readFileSync(path.join(inputDir, f), "utf-8");
+// --- Per-file parsing ---
+// Catches the most common LLM authoring mistakes (wrong enum casing, a
+// string where an integer is required, a slug that isn't kebab-case) at the
+// individual workspace file, with the file name in the error. This is
+// separate from schema conformance — the harness's validation_loop already
+// validates the final agent-result.json against
+// e2e-triage-result.schema.json, but that runs after umbrella merging, so an
+// error there can't always be traced back to the input file that caused it.
+// Re-encoding the *entire* schema here would just create a second copy that
+// can drift; this only checks the handful of fields an LLM is most likely
+// to get subtly wrong. `root_cause_slug`'s pattern mirrors the schema's —
+// if that pattern changes there, update it here too.
+function parseWorkspaceResult(file: string, raw: string): WorkspaceResult {
+  let parsed: unknown;
   try {
-    return JSON.parse(raw) as WorkspaceResult;
+    parsed = JSON.parse(raw);
   } catch (e) {
-    console.error(`Failed to parse ${f}: ${(e as Error).message}`);
-    process.exit(1);
+    throw new Error(`${file}: failed to parse JSON: ${(e as Error).message}`);
   }
-});
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error(`${file}: must be a JSON object`);
+  }
+  const r = parsed as Record<string, unknown>;
 
-const dupWorkspaces = workspaces
-  .map((w) => w.workspace)
-  .filter((name, i, arr) => arr.indexOf(name) !== i);
-if (dupWorkspaces.length > 0) {
-  console.error(
-    `Duplicate workspace result(s) found: ${[...new Set(dupWorkspaces)].join(", ")} — ` +
-      `each workspace should be written once. Check for stale files from a previous run.`,
-  );
-  process.exit(1);
+  if (typeof r.workspace !== "string" || r.workspace.length === 0) {
+    throw new Error(`${file}: missing or invalid "workspace"`);
+  }
+  if (!VALID_CATEGORIES.has(r.fix_category as string)) {
+    throw new Error(
+      `${file}: invalid fix_category "${r.fix_category}" (expected: ${[...VALID_CATEGORIES].join(", ")})`,
+    );
+  }
+  if (typeof r.root_cause_slug !== "string" || !/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(r.root_cause_slug)) {
+    throw new Error(`${file}: invalid root_cause_slug "${r.root_cause_slug}"`);
+  }
+  if (r.issue && typeof r.issue === "object") {
+    const issue = r.issue as Record<string, unknown>;
+    if (!VALID_ACTIONS.has(issue.action as string)) {
+      throw new Error(`${file}: invalid issue.action "${issue.action}"`);
+    }
+    if (issue.action === "comment" && typeof issue.number !== "number") {
+      throw new Error(
+        `${file}: issue.action is "comment" but issue.number is ${typeof issue.number} (expected integer)`,
+      );
+    }
+  }
+
+  return parsed as WorkspaceResult;
 }
 
-// --- Truncate long text at a line boundary instead of mid-sentence/mid-fence ---
+// --- Truncate long text at a line (or word) boundary instead of
+// mid-sentence/mid-fence ---
 function truncateAtBoundary(str: string, maxLen: number): string {
   const marker = "\n\n_(truncated)_";
   if (str.length <= maxLen) return str;
   const budget = maxLen - marker.length;
-  const cut = str.lastIndexOf("\n", budget);
-  return str.slice(0, cut > budget * 0.5 ? cut : budget) + marker;
+  const half = budget * 0.5;
+
+  let cut = str.lastIndexOf("\n", budget);
+  if (cut <= half) {
+    // No newline in the back half of the budget (e.g. one very long line) —
+    // fall back to a word boundary so we don't split a token/URL.
+    cut = str.lastIndexOf(" ", budget);
+  }
+  if (cut <= half) cut = budget;
+
+  return str.slice(0, cut) + marker;
 }
 
 // --- Category dominance ---
@@ -206,8 +219,8 @@ function generateSummary(results: WorkspaceResult[]): string {
 // validation_loop (validate-output-schema.sh against
 // e2e-triage-result.schema.json) and by fullsend-check-output. Re-checking
 // those rules here would be a second copy that can silently drift from the
-// schema. This only checks invariants the schema can't express because they
-// span multiple workspace entries.
+// schema. This only checks an invariant the schema can't express because it
+// spans multiple workspace entries.
 function validate(result: AgentResult): string[] {
   const errors: string[] = [];
 
@@ -219,9 +232,14 @@ function validate(result: AgentResult): string[] {
   }
   for (const [slug, categories] of slugCategories) {
     if (categories.size > 1) {
+      // Applies regardless of group size: dominantCategory() only runs for
+      // groups of ≥3, but two workspaces sharing a slug with different
+      // categories is the same underlying problem — a slug is supposed to
+      // mean "same root cause," which implies "same fix_category."
       errors.push(
-        `root_cause_slug "${slug}" has mixed fix_category values (${[...categories].join(", ")}) ` +
-          `after umbrella merge — dominantCategory() should have unified these`,
+        `root_cause_slug "${slug}" has different fix_category values across workspaces ` +
+          `(${[...categories].join(", ")}). Workspaces sharing a slug should share a fix_category — ` +
+          `reconcile them to the same category, or use different slugs if they aren't actually the same cause.`,
       );
     }
   }
@@ -229,25 +247,76 @@ function validate(result: AgentResult): string[] {
   return errors;
 }
 
-// --- Main ---
-const finalWorkspaces = applyUmbrellaRule(workspaces);
-const summary = generateSummary(finalWorkspaces);
+function main(): void {
+  const args = process.argv.slice(2);
+  let targetBranch = "";
+  let outputPath = "";
+  let inputDir = "";
 
-const result: AgentResult = {
-  target_branch: targetBranch,
-  workspaces: finalWorkspaces,
-  summary,
-};
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--target-branch" && args[i + 1]) {
+      targetBranch = args[++i];
+    } else if (args[i] === "--output" && args[i + 1]) {
+      outputPath = args[++i];
+    } else if (!args[i].startsWith("--")) {
+      inputDir = args[i];
+    }
+  }
 
-const validationErrors = validate(result);
-if (validationErrors.length > 0) {
-  console.error("Validation failed:");
-  for (const e of validationErrors) console.error(`  - ${e}`);
-  process.exit(1);
+  if (!targetBranch || !outputPath || !inputDir) {
+    process.stderr.write("Usage: merge-results.ts --target-branch <branch> --output <path> <workspace-results-dir>\n");
+    process.exit(1);
+  }
+
+  const files = fs.readdirSync(inputDir).filter((f) => f.endsWith(".json")).sort();
+  if (files.length === 0) {
+    process.stderr.write(`No .json files found in ${inputDir}\n`);
+    process.exit(1);
+  }
+
+  const workspaces: WorkspaceResult[] = [];
+  for (const f of files) {
+    const raw = fs.readFileSync(path.join(inputDir, f), "utf-8");
+    try {
+      workspaces.push(parseWorkspaceResult(f, raw));
+    } catch (e) {
+      process.stderr.write(`${(e as Error).message}\n`);
+      process.exit(1);
+    }
+  }
+
+  const dupWorkspaces = workspaces
+    .map((w) => w.workspace)
+    .filter((name, i, arr) => arr.indexOf(name) !== i);
+  if (dupWorkspaces.length > 0) {
+    process.stderr.write(
+      `Duplicate workspace result(s) found: ${[...new Set(dupWorkspaces)].join(", ")} — ` +
+        `each workspace should be written once. Check for stale files from a previous run.\n`,
+    );
+    process.exit(1);
+  }
+
+  const finalWorkspaces = applyUmbrellaRule(workspaces);
+  const summary = generateSummary(finalWorkspaces);
+
+  const result: AgentResult = {
+    target_branch: targetBranch,
+    workspaces: finalWorkspaces,
+    summary,
+  };
+
+  const validationErrors = validate(result);
+  if (validationErrors.length > 0) {
+    process.stderr.write("Validation failed:\n");
+    for (const e of validationErrors) process.stderr.write(`  - ${e}\n`);
+    process.exit(1);
+  }
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, JSON.stringify(result, null, 2) + "\n");
+  console.log(`Wrote ${outputPath}`);
+  console.log(`\n=== E2E Triage Results ===`);
+  console.log(summary);
 }
 
-fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-fs.writeFileSync(outputPath, JSON.stringify(result, null, 2) + "\n");
-console.log(`Wrote ${outputPath}`);
-console.log(`\n=== E2E Triage Results ===`);
-console.log(summary);
+main();

@@ -85,7 +85,7 @@ All write operations are handled by the **post-script** running on the host.
 - Read GitHub issues, PRs, labels via `curl` + GitHub REST API (public repo)
 - Download and analyze prow/GCS artifacts
 - Read local files (test code, config, metadata)
-- Use e2e-failure-analysis and playwright-trace skills
+- Use the e2e-failure-analysis skill
 
 **What you CANNOT do — emit directives instead:**
 - Create or comment on GitHub issues → `issue` directive in output
