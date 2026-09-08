@@ -4,7 +4,7 @@ description: >-
   Analyze E2E nightly test failures, classify root causes per workspace,
   search for existing issues (dedup), and emit structured issue directives.
   Does NOT modify code, create branches, or fix tests.
-model: opus
+model: sonnet
 disallowedTools: >-
   Edit, Write, MultiEdit,
   Bash(git push *), Bash(git push),
