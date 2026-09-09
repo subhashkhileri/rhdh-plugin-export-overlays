@@ -357,7 +357,7 @@ After ALL workspaces are written, run the merge script:
 
 ```bash
 SKILL_DIR="${SKILL_DIR:-.claude/skills/e2e-failure-analysis}"
-node --experimental-strip-types "$SKILL_DIR/scripts/merge-results.ts" \
+python3 "$SKILL_DIR/scripts/merge-results.py" \
   --target-branch "$TARGET_BRANCH" \
   --output "$OUTPUT_DIR/agent-result.json" \
   "$OUTPUT_DIR/workspace-results"
