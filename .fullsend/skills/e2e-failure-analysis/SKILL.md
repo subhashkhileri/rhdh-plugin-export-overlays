@@ -53,18 +53,10 @@ This script gives you:
 - `CrashLoopBackOff` / `ImagePullBackOff` — pod-level failures
 - Failed helm install or pod readiness timeout
 
-**Classify each failure before proceeding:**
-- **UI failure** (Playwright assertions) → proceed to Step 2
-- **Setup/beforeAll failure** (CLI commands, deployment errors) → skip to **Step 5, build-log.txt**
-- **Deployment timeout** (pod 0/1 Ready, "Timeout waiting for pods") → skip to
-  **Step 5, build-log.txt first**, then cluster logs if the pod started
-
-Setup failures have no useful page snapshots, screenshots, or traces. **Go to
-build-log.txt first** — it captures the full stdout/stderr of every deployment script
-and CLI command, so it shows *why* the setup failed. For deployment timeouts, also
-check `backstage-backend.log` if the pod started — it reveals the internal mechanism
-(DB refused, plugin crash, config error). If the pod never started, the backend log
-won't exist — classify from build-log.txt and events.txt instead.
+**All failure types proceed to Step 3 (Group and Analyze)**, which delegates to
+`workspace-analysis.md` for the full analysis methodology — including which
+artifact to check first for UI failures, setup/beforeAll failures, and
+deployment timeouts (see "Cluster Log Search" and "build-log.txt" there).
 
 ## Step 2: Prepare
 
