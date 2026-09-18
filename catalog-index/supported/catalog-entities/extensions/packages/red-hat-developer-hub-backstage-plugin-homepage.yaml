@@ -16,12 +16,12 @@ metadata:
   tags: []
 spec:
   packageName: '@red-hat-developer-hub/backstage-plugin-homepage'
-  # Tag: bs_1.52.1__1.17.1
-  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage:bs_1.52.1__1.17.1"
-  version: 1.17.1
+  # Tag: bs_1.54.6__1.18.0
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage@sha256:acb2c61706313f6e2da3b3af4ee2d3cf19ff192567588ae95234d6c046690fb5"
+  version: 1.18.0
   backstage:
     role: frontend-plugin
-    supportedVersions: 1.52.0
+    supportedVersions: 1.54.6
   author: Red Hat
   support: generally-available
   lifecycle: active
@@ -130,4 +130,3 @@ spec:
         #       ref: rhdh-entity-section
         #     - id: template-list
         #       ref: rhdh-template-section
-

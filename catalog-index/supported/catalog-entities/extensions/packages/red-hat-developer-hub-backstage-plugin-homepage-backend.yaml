@@ -16,14 +16,14 @@ metadata:
   tags: []
 spec:
   packageName: "@red-hat-developer-hub/backstage-plugin-homepage-backend"
-  # Tag: bs_1.52.1__0.4.0, Build date: 2026-05-22T15:16:41Z
-  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage-backend@sha256:517fcea03d5a173345fa6a4e9e94864d4064ba950b67d3bd14c977af13686573"
-  version: 0.4.0
+  # Tag: bs_1.54.6__0.5.0, Build date: 2026-05-22T15:16:41Z
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage-backend@sha256:5cfef02deb43180f167a90fcf3029fea1cd84117df07927cb5139b2365d54d6a"
+  version: 0.5.0
   backstage:
     role: backend-plugin
-    supportedVersions: 1.52.0
+    supportedVersions: 1.54.6
   author: Red Hat
-  support: tech-preview
+  support: generally-available
   lifecycle: active
   partOf:
     - home-page
