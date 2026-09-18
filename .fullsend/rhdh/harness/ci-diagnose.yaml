@@ -7,10 +7,14 @@
 #                 classifies (pr_regression / flake / pre_existing / ...),
 #                 and renders the sticky PR comment body.
 #   post_script : upserts ONE sticky comment on the PR (edit-in-place via a
-#                 hidden marker), so re-runs update rather than spam.
+#                 hidden marker), so re-runs update rather than spam. For
+#                 bot-authored same-repo PRs with pr_regression findings it
+#                 also submits CHANGES_REQUESTED as this review App, which is
+#                 the built-in bot→fix on-ramp in reusable-dispatch.yml.
 #
 # The ci-diagnose agent does NOT modify code, push branches, or create PRs.
-# It only reads CI artifacts/logs and writes a diagnostic comment.
+# It only reads CI artifacts/logs and writes a diagnostic comment. The
+# post-script is the only GitHub writer (sticky comment + optional review).
 #
 # Trigger: either (a) a `ci-diagnose` label applied by the bootstrap workflow
 # (.github/workflows/ci-diagnose-agent.yaml), which reacts to CI-completion
@@ -61,7 +65,6 @@ host_files:
 
 skills:
   - skills/e2e-failure-analysis
-  - skills/playwright-trace
 
 post_script: rhdh/scripts/post-ci-diagnose.sh
 
@@ -78,6 +81,13 @@ env:
   sandbox:
     SKILL_DIR: /sandbox/claude-config/skills/e2e-failure-analysis
     PLAYWRIGHT_BROWSERS_PATH: /tmp/playwright-browsers
+    # claude -p drops background Agent-tool subagents after 10 minutes of
+    # continuous idle waiting (no result trickling back) and returns a
+    # partial result. This agent fans out one subagent per red Prow
+    # workspace, each doing deep trace/screenshot/log analysis —
+    # plausibly all still running past 10 minutes. Disable the ceiling;
+    # the existing timeout_minutes: 60 below is the real bound.
+    CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0"
     GH_TOKEN: "${GH_TOKEN}"
     GITHUB_ISSUE_URL: "${GITHUB_ISSUE_URL}"
     REPO_FULL_NAME: redhat-developer/rhdh-plugin-export-overlays
