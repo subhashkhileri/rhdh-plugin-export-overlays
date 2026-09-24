@@ -211,12 +211,26 @@ jobs:
           NEW_STATE=$(jq -cn --arg sha "${HEAD_SHA}" --argjson red "${RED_NAMES}" \
             '{sha:$sha, red:$red}' | jq -cS .)
 
-          # -- Read the previous state marker from the latest diagnosis
-          # comment -----------------------------------------------------------
+          # -- Read previous state from latest parseable diagnosis comment ----
           # Only trust markers from the agent's own identity — otherwise
           # anyone with comment access could forge one to force/suppress a re-fire.
           PREV_BODY=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" 2>/dev/null \
-            | jq -rs '[.[][]? | select(.user.login == "fullsend-ai-review[bot]" and (.body | contains("<!-- ci-diagnose -->")))] | last | .body // ""' \
+            | jq -rs '
+                def state_from_body:
+                  try (capture("<!-- ci-diagnose-state: (?<state>.*) -->").state | fromjson)
+                  catch null;
+                [
+                  .[][]?
+                  | select(.user.login == "fullsend-ai-review[bot]")
+                  | (.body // "") as $body
+                  | select($body | contains("<!-- ci-diagnose -->"))
+                  | ($body | state_from_body) as $state
+                  | select($state != null)
+                  | {body: $body}
+                ]
+                | last
+                | .body // ""
+              ' \
             || true)
           PREV_STATE=""
           if [[ -n "${PREV_BODY}" ]]; then

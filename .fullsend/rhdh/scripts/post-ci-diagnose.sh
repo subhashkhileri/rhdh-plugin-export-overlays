@@ -385,7 +385,6 @@ if [[ -n "${RECORDED_HEAD}" ]]; then
     STALE="true"
     echo "::warning::Analyzed head $(sanitize_for_gha "${RECORDED_HEAD}") is stale (current head $(sanitize_for_gha "${CURRENT_HEAD}")) — posting a stale notice instead"
     {
-      echo "${DIAGNOSIS_MARKER}"
       echo "### 🔍 CI Diagnosis"
       echo ""
       echo "This PR advanced before the diagnosis finished, so the result below is outdated and was not posted."
@@ -398,6 +397,9 @@ if [[ -n "${RECORDED_HEAD}" ]]; then
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# 5. Post a new diagnosis comment
+# ---------------------------------------------------------------------------
 # Always create a new comment. The hidden marker remains only as a state
 # marker for the bootstrap and agent reconciliation; it is not used to
 # update old comments.

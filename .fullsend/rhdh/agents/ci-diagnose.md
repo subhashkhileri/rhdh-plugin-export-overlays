@@ -97,7 +97,22 @@ not repetitive:
 
 ```bash
 PREV=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-  | jq -rs '[.[][]? | select(.user.login == "fullsend-ai-review[bot]" and (.body | contains("<!-- ci-diagnose -->")))] | last | .body // ""')
+  | jq -rs '
+      def state_from_body:
+        try (capture("<!-- ci-diagnose-state: (?<state>.*) -->").state | fromjson)
+        catch null;
+      [
+        .[][]?
+        | select(.user.login == "fullsend-ai-review[bot]")
+        | (.body // "") as $body
+        | select($body | contains("<!-- ci-diagnose -->"))
+        | ($body | state_from_body) as $state
+        | select($state != null)
+        | {body: $body}
+      ]
+      | last
+      | .body // ""
+    ')
 ```
 
 Reuse prior per-check findings for checks whose classification is unlikely to
