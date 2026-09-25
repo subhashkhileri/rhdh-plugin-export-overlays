@@ -17,7 +17,8 @@ metadata:
     - authentication
 spec:
   packageName: "@backstage/plugin-auth-backend-module-gitlab-provider"
-  dynamicArtifact: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-auth-backend-module-gitlab-provider:bs_1.54.6__0.4.6
+  # Tag: bs_1.54.6__0.4.6
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-auth-backend-module-gitlab-provider@sha256:0d7576fc2fbe7d7e3b2c8aaee31f24a8c76351d7e42b884221776b92e4d6ef87"
   version: 0.4.6
   backstage:
     role: backend-plugin-module

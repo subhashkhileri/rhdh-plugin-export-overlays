@@ -16,9 +16,9 @@ metadata:
   tags: []
 spec:
   packageName: "@backstage-community/plugin-nexus-repository-manager"
-  # Tag: bs_1.54.6__1.27.2
-  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-nexus-repository-manager@sha256:b29ec6828de87b4e27de478a481f9d7195440fd17be484d5705392384a09d207"
-  version: 1.27.2
+  # Tag: bs_1.54.6__1.27.4
+  dynamicArtifact: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-nexus-repository-manager@sha256:9d6a1c9eef02dc677924eb4f5c9916706a1104893661db67989a0a9bf5e70c41"
+  version: 1.27.4
   backstage:
     role: frontend-plugin
     supportedVersions: 1.54.6

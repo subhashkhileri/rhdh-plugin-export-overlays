@@ -108,6 +108,7 @@ spec:
     - ./backstage-plugin-notifications-backend-module-email.yaml
     - ./backstage-plugin-notifications-backend.yaml
     - ./backstage-plugin-notifications.yaml
+    - ./backstage-plugin-org.yaml
     - ./backstage-plugin-scaffolder-backend-module-azure.yaml
     - ./backstage-plugin-scaffolder-backend-module-bitbucket-cloud.yaml
     - ./backstage-plugin-scaffolder-backend-module-bitbucket-server.yaml
@@ -136,10 +137,10 @@ spec:
     - ./proberaum-backstage-plugin-env-viewer.yaml
     - ./proberaum-backstage-plugin-github-notifications-backend.yaml
     - ./proberaum-backstage-plugin-icon-viewer.yaml
+    - ./red-hat-developer-hub-backstage-plugin-ai-catalog.yaml
     - ./red-hat-developer-hub-backstage-plugin-app-auth.yaml
     - ./red-hat-developer-hub-backstage-plugin-app-defaults.yaml
     - ./red-hat-developer-hub-backstage-plugin-app-integrations.yaml
-    - ./red-hat-developer-hub-backstage-plugin-boost.yaml
     - ./red-hat-developer-hub-backstage-plugin-bulk-import-backend.yaml
     - ./red-hat-developer-hub-backstage-plugin-bulk-import.yaml
     - ./red-hat-developer-hub-backstage-plugin-global-header.yaml
@@ -174,6 +175,7 @@ spec:
     - ./rhdh-bs-plugin-catalog-backend-module-ai-model-server.yaml
     - ./rhdh-bs-plugin-catalog-backend-module-ai-resource-agent.yaml
     - ./rhdh-bs-plugin-catalog-backend-module-ai-resource-extensions.yaml
+    - ./rhdh-bs-plugin-catalog-backend-module-mcp-registry-provider.yaml
     - ./rhdh-bs-plugin-catalog-backend-module-model-catalog.yaml
     - ./rhdh-bs-plugin-catalog-techdoc-url-reader-backend.yaml
     - ./rhdh-bs-plugin-kserve-kubeflow-connector-backend.yaml
