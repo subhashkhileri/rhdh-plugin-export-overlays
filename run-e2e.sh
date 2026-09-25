@@ -44,7 +44,8 @@ cd "$SCRIPT_DIR"
 
 # RHDH deployment
 export RHDH_VERSION="2.0"             # RHDH version to deploy (e.g., "1.10", "next")
-export INSTALLATION_METHOD="${INSTALLATION_METHOD:-helm}" # "helm" or "operator"
+# TODO: revert to "${INSTALLATION_METHOD:-helm}" once operator subscription support is validated in CI
+export INSTALLATION_METHOD="operator" # "helm" or "operator"
 
 # Playwright
 export CI="${CI:-true}"                                  # Enables CI mode (forbidOnly, teardown)
