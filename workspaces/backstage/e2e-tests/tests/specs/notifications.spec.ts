@@ -13,7 +13,6 @@ test.describe("Backstage Notifications Plugin", () => {
     );
     await rhdh.configure({
       appConfig: `${configBase}/app-config-rhdh.yaml`,
-      valueFile: `${configBase}/value-file.yaml`,
       dynamicPlugins: `${configBase}/dynamic-plugins.yaml`,
       auth: "keycloak",
     });
