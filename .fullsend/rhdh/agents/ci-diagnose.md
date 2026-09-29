@@ -122,8 +122,10 @@ have changed; focus fresh analysis on checks newly red since the last run.
 
 ### Prow (`ci/prow/*`)
 
-The rollup `url` is the Prow/gcsweb URL. Diagnose with the skills — artifacts,
-traces, cluster logs — exactly as the nightly e2e-triage agent does:
+The rollup `url` is the Prow/gcsweb URL. **You (the coordinator) MUST
+download artifacts and run diagnostics yourself** before spawning any
+sub-agents — following the same pattern as the e2e-triage agent. Sub-agents
+receive local file paths, never URLs to external CI infrastructure:
 
 ```bash
 SKILL_DIR="${SKILL_DIR:-.claude/skills/e2e-failure-analysis}"
@@ -131,17 +133,38 @@ ARTIFACTS=$(node --experimental-strip-types "$SKILL_DIR/scripts/download-artifac
 node --experimental-strip-types "$SKILL_DIR/scripts/diagnostics.ts" "$ARTIFACTS"
 ```
 
-Then invoke `/e2e-failure-analysis` — trace inspection for UI failures is
-built into the skill's methodology (tiered: quick check first, full
-timeline when ambiguous). Check cluster logs (`pods.txt`, `events.txt`,
-`backstage-backend.log`) for deployment failures. **If the skill fails to
-invoke, stop and report it** — do not guess a classification without it.
+**Hard requirement — no artifacts, no diagnosis.** You MUST run
+`download-artifacts.ts` and confirm it succeeded (non-empty `$ARTIFACTS`
+directory) before classifying ANY Prow check. If the download fails:
 
-**Multiple red checks are independent — diagnose them in parallel.** When two
-or more curated checks are red (e.g. two Prow lanes, or a Prow lane plus a
-GHA check), dispatch one sub-agent per check concurrently rather than working
-through them one at a time. Each check's evidence, artifacts, and
-classification are self-contained, so there's nothing to serialize on.
+1. Report the **exact error** from the command (not a guess like "network
+   blocked").
+2. Classify the check as `needs_human` with evidence
+   `"artifact download failed: <actual error output>"`.
+3. Do NOT fall back to PR comment data, bot summaries, or GitHub API for
+   Prow diagnosis — those sources lack the cluster logs, traces, and test
+   output needed to distinguish `pr_regression` from `pre_existing`.
+
+**Never fabricate an infrastructure excuse.** If a command errors, report
+the literal output. Do not infer "network policy" or "sandbox restriction"
+without evidence — run the command and let it speak for itself.
+
+Then invoke `/e2e-failure-analysis` with the downloaded artifacts — trace
+inspection for UI failures is built into the skill's methodology (tiered:
+quick check first, full timeline when ambiguous). Check cluster logs
+(`pods.txt`, `events.txt`, `backstage-backend.log`) for deployment failures.
+**If the skill fails to invoke, stop and report it** — do not guess a
+classification without it.
+
+**Multiple red Prow checks:** Download artifacts for each Prow check
+yourself (sequentially — they share a cache directory), then fan out
+sub-agents for analysis. Each sub-agent prompt must include the **local
+`$ARTIFACTS` path** so it reads files from disk, not from the network.
+
+**Multiple check types in parallel.** When both Prow and non-Prow checks
+are red, you may diagnose non-Prow checks (GHA/status) concurrently with
+Prow analysis — those use `gh run view`, not artifact downloads. But Prow
+artifact download always happens at the coordinator level first.
 
 ### GitHub Actions (`gha_check`) and comment-command (`status`)
 
@@ -414,6 +437,19 @@ classification).
   checks that are still red.
 - When spawning sub-agents (e.g. per Prow workspace), always pass
   `model: "opus"`.
+- **No diagnosis without primary evidence.** For Prow checks, primary evidence
+  is the downloaded artifacts (test output, cluster logs, traces). For GHA
+  checks, it is the `gh run view --log-failed` output. PR comments, bot
+  summaries, and prior diagnosis comments are **secondary** sources — they can
+  inform but never substitute for primary evidence. If primary evidence cannot
+  be obtained, classify as `needs_human` with the exact retrieval error. Never
+  produce a diagnosis from secondary sources alone and present it as if primary
+  evidence was reviewed.
+- **Never fabricate infrastructure errors.** If you did not run a command, do
+  not claim it failed. If you ran it and it errored, quote the actual error
+  output. Claiming "network blocked" or "sandbox restriction" without running
+  the command and observing the error is a fabrication — it masks the real
+  issue (the command was never attempted) and leads to incorrect diagnoses.
 
 ## Sandbox Execution Model
 
