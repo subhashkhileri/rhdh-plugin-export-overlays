@@ -311,31 +311,37 @@ merely mentions "e2e" or "timeout" is not a match.
 it). Omit the key entirely when nothing matched — do not emit `[]`. Cap at
 5.
 
-### 3b-ii: Search open issues
+### 3b-ii: Search open issues (last 15 days only)
 
 Search for tracking issues that already describe this failure — typically
 `[fullsend] E2E:` issues created by nightly triage. Use the same search
-key derived above.
+key derived above. **Only include issues updated within the last 15 days**
+— older issues are likely stale (created but never closed) and linking to
+them gives the PR author false confidence that the problem is being worked.
 
 ```bash
-# Open issues (not PRs) whose title/body mention the workspace, failing
-# spec, or a distinctive error token. Use the e2e-failure label when the
-# search key is generic to narrow results.
+# Compute the cutoff date (15 days ago, ISO 8601).
+CUTOFF=$(date -u -d '15 days ago' '+%Y-%m-%d' 2>/dev/null \
+  || date -u -v-15d '+%Y-%m-%d')
+
+# Open issues (not PRs) updated since CUTOFF whose title/body mention the
+# workspace, failing spec, or a distinctive error token.
 ISSUE_CANDIDATES=$(gh api -X GET search/issues \
-  -f q="repo:${REPO} is:issue state:open ${SEARCH_KEY}" \
-  --jq '[.items[] | {number, title, url: .html_url, labels: [.labels[].name]}]')
+  -f q="repo:${REPO} is:issue state:open updated:>=${CUTOFF} ${SEARCH_KEY}" \
+  --jq '[.items[] | {number, title, url: .html_url, labels: [.labels[].name], updated_at}]')
 ISSUE_FILTERED=$(echo "${ISSUE_CANDIDATES}" | jq '.[:5]')
 ```
 
-**What counts as a match:** an open issue that tracks the same failure —
-same workspace and same root cause (e.g. matching `root_cause_slug` in the
-issue body, or title naming the same spec/helper). `[fullsend] E2E:` issues
-are strong matches when their title references the same workspace or error
-signature. Do not match generic issues that merely mention the workspace.
+**What counts as a match:** an open issue updated in the last 15 days that
+tracks the same failure — same workspace and same root cause (e.g. matching
+`root_cause_slug` in the issue body, or title naming the same spec/helper).
+`[fullsend] E2E:` issues are strong matches when their title references the
+same workspace or error signature. Do not match generic issues that merely
+mention the workspace.
 
-**Populate `related_issues`** on that check (number + url; title and labels
-if available). Omit the key entirely when nothing matched — do not emit
-`[]`. Cap at 5.
+**Populate `related_issues`** on that check (number + url; title, labels,
+and updated_at if available). Omit the key entirely when nothing matched —
+do not emit `[]`. Cap at 5.
 
 ## Phase 4: Render the diagnosis comment (`comment_body`)
 

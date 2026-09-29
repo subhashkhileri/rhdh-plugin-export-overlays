@@ -143,10 +143,15 @@
                 "maxItems": 10,
                 "items": { "type": "string", "maxLength": 64 },
                 "description": "Labels on the issue (e.g. 'e2e-failure'). Helps the reader gauge triage status."
+              },
+              "updated_at": {
+                "type": "string",
+                "maxLength": 32,
+                "description": "ISO 8601 timestamp of last update (e.g. '2026-09-28T14:30:00Z'). Used to assess recency."
               }
             }
           },
-          "description": "Open issues that track the same failure. Typically '[fullsend] E2E:' tracking issues created by nightly triage. Populate for pre_existing and product_bug after searching open issues; omit the key when none found (do not emit an empty array)."
+          "description": "Open issues updated within the last 15 days that track the same failure. Typically '[fullsend] E2E:' tracking issues created by nightly triage. Populate for pre_existing and product_bug after searching recent open issues; omit the key when none found (do not emit an empty array)."
         }
       },
       "allOf": [
