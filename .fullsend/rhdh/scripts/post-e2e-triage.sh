@@ -362,7 +362,7 @@ if [[ -n "${TRIGGER_ISSUE_NUMBER}" ]]; then
   for c in "${CATEGORIES[@]:-}"; do
     case "${c}" in
       test_fix|product_bug) AUTO_FIX=$((AUTO_FIX + 1)) ;;
-      environment)          NEEDS_HUMAN=$((NEEDS_HUMAN + 1)) ;;
+      environment|upstream_test_utils) NEEDS_HUMAN=$((NEEDS_HUMAN + 1)) ;;
       infra_flake)          FLAKE=$((FLAKE + 1)) ;;
       *)
         OTHER=$((OTHER + 1))
