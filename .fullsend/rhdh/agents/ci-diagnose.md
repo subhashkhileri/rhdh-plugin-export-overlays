@@ -328,7 +328,7 @@ CUTOFF=$(date -u -d '15 days ago' '+%Y-%m-%d' 2>/dev/null \
 # workspace, failing spec, or a distinctive error token.
 ISSUE_CANDIDATES=$(gh api -X GET search/issues \
   -f q="repo:${REPO} is:issue state:open updated:>=${CUTOFF} ${SEARCH_KEY}" \
-  --jq '[.items[] | {number, title, url: .html_url, labels: [.labels[].name], updated_at}]')
+  --jq '[.items[] | {number, title, url: .html_url, labels: [.labels[].name]}]')
 ISSUE_FILTERED=$(echo "${ISSUE_CANDIDATES}" | jq '.[:5]')
 ```
 
@@ -339,9 +339,9 @@ tracks the same failure — same workspace and same root cause (e.g. matching
 same workspace or error signature. Do not match generic issues that merely
 mention the workspace.
 
-**Populate `related_issues`** on that check (number + url; title, labels,
-and updated_at if available). Omit the key entirely when nothing matched —
-do not emit `[]`. Cap at 5.
+**Populate `related_issues`** on that check (number + url; title and labels
+if available). Omit the key entirely when nothing matched — do not emit
+`[]`. Cap at 5.
 
 ## Phase 4: Render the diagnosis comment (`comment_body`)
 
