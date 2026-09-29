@@ -126,20 +126,20 @@ that persists across multiple SHAs is less likely to be a flake).
 
 ### Prow (`ci/prow/*`)
 
-The rollup `url` is the Prow/gcsweb URL. **You (the coordinator) MUST
-download artifacts and run diagnostics yourself** before spawning any
-sub-agents — following the same pattern as the e2e-triage agent. Sub-agents
-receive local file paths, never URLs to external CI infrastructure:
+The rollup `url` is the Prow/gcsweb URL. Invoke `/e2e-failure-analysis` with
+it — same delegation the e2e-triage agent uses. The skill owns artifact
+download (Step 0, skip-if-already-downloaded), diagnostics (Step 1),
+per-workspace grouping, and subagent fan-out (Step 3): each subagent gets a
+local `$ARTIFACTS`/`$BUILD_LOG` path, never a URL, and returns per-test
+**evidence only** — never a classification, since classification needs
+cross-check context (PR diff, other checks, cross-workspace patterns) that
+subagents lack. Do not hand-roll the download/diagnostics commands or the
+subagent fan-out yourself — the skill already does both, and doing them again
+here just duplicates work the skill will redo internally.
 
-```bash
-SKILL_DIR="${SKILL_DIR:-.claude/skills/e2e-failure-analysis}"
-ARTIFACTS=$(node --experimental-strip-types "$SKILL_DIR/scripts/download-artifacts.ts" "${PROW_URL}")
-node --experimental-strip-types "$SKILL_DIR/scripts/diagnostics.ts" "$ARTIFACTS"
-```
-
-**Hard requirement — no artifacts, no diagnosis.** You MUST run
-`download-artifacts.ts` and confirm it succeeded (non-empty `$ARTIFACTS`
-directory) before classifying ANY Prow check. If the download fails:
+**Hard requirement — no artifacts, no diagnosis.** The skill's Step 0 must
+succeed (non-empty `$ARTIFACTS`) before you classify ANY Prow check. If it
+fails:
 
 1. Report the **exact error** from the command (not a guess like "network
    blocked").
@@ -153,37 +153,22 @@ directory) before classifying ANY Prow check. If the download fails:
 the literal output. Do not infer "network policy" or "sandbox restriction"
 without evidence — run the command and let it speak for itself.
 
-Then invoke `/e2e-failure-analysis` yourself (the coordinator) — trace
-inspection for UI failures is built into the skill's methodology (tiered:
-quick check first, full timeline when ambiguous). Check cluster logs
-(`pods.txt`, `events.txt`, `backstage-backend.log`) for deployment failures.
 **If the skill fails to invoke, stop and report it** — do not guess a
-classification without it.
+classification without it. Trace inspection for UI failures and cluster log
+checks (`pods.txt`, `events.txt`, `backstage-backend.log`) for deployment
+failures are built into the skill's methodology (tiered: quick check first,
+full timeline when ambiguous) — do not duplicate them here.
 
-**Sub-agents return evidence, not classifications.** When fanning out
-sub-agents for per-workspace analysis, each sub-agent prompt must:
+If a subagent the skill spawned fails or returns unusable output, analyze
+that workspace inline as a fallback — do not silently drop it.
 
-1. Include the **local `$ARTIFACTS` path** (and `$BUILD_LOG`, `$SKILL_DIR`
-   if available) so it reads from disk, not the network.
-2. Instruct the sub-agent to return **per-test evidence** — what failed,
-   the error mechanism, which files/components are involved, and whether
-   the same infrastructure worked for other tests.
-3. **Not** ask the sub-agent for a classification. Classification requires
-   cross-check context (PR diff, other checks' results, cross-workspace
-   patterns) that sub-agents lack. The coordinator classifies after
-   collecting all evidence.
-
-If a sub-agent fails or returns unusable output, analyze that workspace
-inline as a fallback — do not silently drop it.
-
-**Multiple red Prow checks:** Download artifacts for each Prow check
-yourself (sequentially — they share a cache directory), then fan out
-sub-agents for per-workspace evidence gathering.
+**Multiple red Prow checks:** invoke the skill once per check URL,
+sequentially — they share a download cache directory.
 
 **Multiple check types in parallel.** When both Prow and non-Prow checks
 are red, you may diagnose non-Prow checks (GHA/status) concurrently with
-Prow analysis — those use `gh run view`, not artifact downloads. But Prow
-artifact download always happens at the coordinator level first.
+Prow analysis — those use `gh run view`, not artifact downloads. But for a
+given Prow check, artifact download always happens first, via the skill.
 
 ### GitHub Actions (`gha_check`) and comment-command (`status`)
 
@@ -466,12 +451,13 @@ classification).
   runs it as part of its methodology; do not classify a UI failure before it returns.
 - **Correlate with the diff.** Never call something `pre_existing` or `flake`
   without checking whether the PR's changes touch the failing area.
-- **Sub-agent type.** When spawning sub-agents (e.g. per Prow workspace
-  or per check), always pass `model: "opus"` and
-  `subagent_type: "ci-diagnose"`. Generic sub-agents lack the full
-  ci-diagnose methodology, skill access (e.g. `/e2e-failure-analysis`),
-  and the constraints in this document — they can improvise around missing
-  data and produce plausible-sounding but incorrect diagnoses.
+- **Sub-agent type.** `/e2e-failure-analysis` owns Prow subagent fan-out
+  (per-workspace evidence gathering) and already pins `model: "opus"` —
+  don't re-dispatch those yourself. If you spawn a sub-agent directly for
+  anything else (e.g. a manual fallback when the skill fails to invoke, or
+  parallel GHA/status diagnosis), always pass `model: "opus"` and
+  `subagent_type: "ci-diagnose"` so it inherits the full ci-diagnose
+  methodology and skill access instead of improvising around missing data.
 - **No diagnosis without primary evidence.** Every check type has a primary
   evidence source — the actual CI output that shows what failed and why:
 
