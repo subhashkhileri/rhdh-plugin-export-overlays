@@ -181,10 +181,12 @@ The full log can run tens of KB and get truncated to a file, costing a
 second read — grep for the `##[error]` annotation lines (with context)
 first; only fall back to a raw tail if nothing matches.
 
-If the `gh run view` command itself errors (network/policy issue, not a
-real log absence), fall back to `gh api
-repos/${REPO}/check-runs/<id>/annotations` — lower detail, but usually
-enough to classify.
+If the `gh run view` command itself errors, fall back to `gh api
+repos/${REPO}/check-runs/<id>/annotations` — lower detail, but still
+primary evidence (it comes from the CI system, not from PR comments). If
+**both** fail, classify as `needs_human` with the exact errors from both
+attempts. Do NOT fall back to PR comments or bot summaries as a substitute
+for actual CI logs.
 
 Read the actual assertion/compiler/validator error — not just "step failed".
 For `E2E Code Quality` (eslint/prettier/tsc), `appConfigExamples coverage`,
@@ -437,19 +439,28 @@ classification).
   checks that are still red.
 - When spawning sub-agents (e.g. per Prow workspace), always pass
   `model: "opus"`.
-- **No diagnosis without primary evidence.** For Prow checks, primary evidence
-  is the downloaded artifacts (test output, cluster logs, traces). For GHA
-  checks, it is the `gh run view --log-failed` output. PR comments, bot
-  summaries, and prior diagnosis comments are **secondary** sources — they can
-  inform but never substitute for primary evidence. If primary evidence cannot
-  be obtained, classify as `needs_human` with the exact retrieval error. Never
-  produce a diagnosis from secondary sources alone and present it as if primary
-  evidence was reviewed.
-- **Never fabricate infrastructure errors.** If you did not run a command, do
-  not claim it failed. If you ran it and it errored, quote the actual error
-  output. Claiming "network blocked" or "sandbox restriction" without running
-  the command and observing the error is a fabrication — it masks the real
-  issue (the command was never attempted) and leads to incorrect diagnoses.
+- **No diagnosis without primary evidence.** Every check type has a primary
+  evidence source — the actual CI output that shows what failed and why:
+
+  | Check type | Primary evidence |
+  |------------|-----------------|
+  | `prow` | Downloaded artifacts (test output, cluster logs, traces) |
+  | `gha_check` | `gh run view --log-failed` or `check-runs/<id>/annotations` |
+  | `status` | `gh run view --log-failed` via the `targetUrl` run ID |
+
+  PR comments, bot summaries, and prior diagnosis comments are **secondary**
+  sources — they can inform (e.g. cross-run trend, known issue context) but
+  never substitute for primary evidence. If primary evidence cannot be
+  obtained for any check type, classify that check as `needs_human` with the
+  exact retrieval error. Never produce a diagnosis from secondary sources
+  alone and present it as if primary evidence was reviewed.
+- **Never fabricate infrastructure errors.** This applies to every command
+  you run — artifact downloads, `gh run view`, `gh api`, skill invocations.
+  If you did not run a command, do not claim it failed. If you ran it and it
+  errored, quote the actual error output. Claiming "network blocked",
+  "sandbox restriction", or "access denied" without running the command and
+  observing that specific error is a fabrication — it masks the real issue
+  (the command was never attempted) and leads to incorrect diagnoses.
 
 ## Sandbox Execution Model
 
