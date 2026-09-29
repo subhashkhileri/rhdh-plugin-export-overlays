@@ -175,10 +175,57 @@ rm -rf "${SCAN_DIR}"
 echo "Result file scan passed"
 
 # ---------------------------------------------------------------------------
-# 3. Execute issue directives per workspace
+# 3. Execute issue directives per cause
 # ---------------------------------------------------------------------------
 declare -a SUMMARY_LINES=()
 declare -a CATEGORIES=()
+
+# update_tracking_workspaces — keep an existing issue's workspace tracking lines
+# in sync with the cause's current membership.
+#
+# Tracking lines (`fullsend-tracking: workspace=<name>`) are the search anchor
+# the next night's dedup relies on, and they live only in the issue BODY. When
+# we merely comment, a workspace that starts failing under this cause AFTER the
+# issue was created never gets a tracking line, so a later slug-drift run (where
+# the workspace net is the only fallback) can miss the open issue and file a
+# duplicate. On every comment we UNION tonight's affected set into the body's
+# workspace lines — union, not replace, so a workspace that passed tonight but
+# may regress later keeps its anchor. Editing the body is safe: the issues
+# workflow only reacts to `labeled`, never `edited`.
+update_tracking_workspaces() {
+  local issue="$1"; shift
+  local -a want=("$@")
+  local body ws missing=() block new_body
+  if ! body="$(gh api "repos/${REPO_FULL_NAME}/issues/${issue}" --jq '.body' 2>/dev/null)"; then
+    echo "::warning::Could not fetch #${issue} body to sync tracking lines"
+    return 0
+  fi
+  for ws in "${want[@]}"; do
+    grep -Fq "fullsend-tracking: workspace=${ws}" <<<"${body}" || missing+=("${ws}")
+  done
+  [[ ${#missing[@]} -eq 0 ]] && return 0
+
+  block=""
+  for ws in "${missing[@]}"; do
+    block+="\`fullsend-tracking: workspace=${ws}\`"$'\n'
+  done
+  # Insert the missing lines right after the last existing workspace line so the
+  # tracking block stays grouped; if none exist, append at the end (search is
+  # in:body, so position is functionally irrelevant either way). The block is
+  # passed via the environment (ENVIRON) rather than -v because it contains
+  # newlines, which -v mishandles on BSD awk.
+  new_body="$(TRACK_BLOCK="${block}" awk '
+    { lines[NR]=$0; if ($0 ~ /fullsend-tracking: workspace=/) last=NR }
+    END {
+      for (i=1;i<=NR;i++) { print lines[i]; if (i==last) printf "%s", ENVIRON["TRACK_BLOCK"] }
+      if (last=="") printf "%s", ENVIRON["TRACK_BLOCK"]
+    }' <<<"${body}")"
+
+  if ! printf '%s' "${new_body}" | gh issue edit "${issue}" \
+    --repo "${REPO_FULL_NAME}" --body-file - >/dev/null 2>&1; then
+    echo "::warning::Failed to sync tracking lines on #${issue}"
+  fi
+}
 
 for i in $(seq 0 $((ISSUE_COUNT - 1))); do
   WS_JSON="$(jq -c ".issues[$i]" "${RESULT_FILE}")"
@@ -236,7 +283,7 @@ for i in $(seq 0 $((ISSUE_COUNT - 1))); do
           add_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"
         fi
       else
-        echo "::warning::Failed to create issue for ${WS_NAME}: $(sanitize_for_gha "$(cat "${create_stderr}")")"
+        echo "::warning::Failed to create issue for $(sanitize_for_gha "${WS_NAME}"): $(sanitize_for_gha "$(cat "${create_stderr}")")"
       fi
       rm -f "${create_stderr}"
       ;;
@@ -254,10 +301,22 @@ for i in $(seq 0 $((ISSUE_COUNT - 1))); do
       fi
       ISSUE_REF="#${ISSUE_NUMBER}"
 
+      # Keep the body's workspace tracking lines in sync with this cause's
+      # current membership so next night's dedup can still find the issue.
+      mapfile -t AFFECTED_WS < <(echo "${WS_JSON}" | jq -r '.affected_workspaces[]')
+      if [[ ${#AFFECTED_WS[@]} -gt 0 ]]; then
+        update_tracking_workspaces "${ISSUE_NUMBER}" "${AFFECTED_WS[@]}"
+      fi
+
       # ---------------------------------------------------------------
       # 4. Handle cycle_ready_to_code
       # ---------------------------------------------------------------
-      if [[ "${CYCLE}" == "true" ]]; then
+      # Only cycle for auto-fixable causes. ready-to-code wakes the code agent;
+      # cycling it on an environment cause (or an umbrella tracking a
+      # cluster-wide outage) would aim a code-fix run at something no code
+      # change can fix. The agent should already gate the flag this way — this
+      # is a defensive backstop.
+      if [[ "${CYCLE}" == "true" && ( "${FIX_CAT}" == "test_fix" || "${FIX_CAT}" == "product_bug" ) ]]; then
         echo "  Cycling ready-to-code label on #${ISSUE_NUMBER}..."
         if remove_label "${REPO_FULL_NAME}" "${ISSUE_NUMBER}" "ready-to-code"; then
           sleep 1
@@ -266,6 +325,8 @@ for i in $(seq 0 $((ISSUE_COUNT - 1))); do
         else
           echo "::warning::Failed to remove ready-to-code from #${ISSUE_NUMBER} — label cycle skipped, coder may not re-trigger"
         fi
+      elif [[ "${CYCLE}" == "true" ]]; then
+        echo "  cycle_ready_to_code set on a '${FIX_CAT}' cause — not cycling (needs human)"
       fi
       ;;
 
@@ -274,7 +335,7 @@ for i in $(seq 0 $((ISSUE_COUNT - 1))); do
       ;;
 
     *)
-      echo "::warning::Unknown issue action '${ISSUE_ACTION}' for ${WS_NAME} — skipping"
+      echo "::warning::Unknown issue action '$(sanitize_for_gha "${ISSUE_ACTION}")' for $(sanitize_for_gha "${WS_NAME}") — skipping"
       ;;
   esac
 
@@ -297,12 +358,16 @@ if [[ -n "${TRIGGER_ISSUE_NUMBER}" ]]; then
   # Category breakdown for the headline. test_fix + product_bug are handed to
   # the code agent automatically; environment needs a human; infra_flake is
   # transient (no issue).
-  AUTO_FIX=0; NEEDS_HUMAN=0; FLAKE=0
+  AUTO_FIX=0; NEEDS_HUMAN=0; FLAKE=0; OTHER=0
   for c in "${CATEGORIES[@]:-}"; do
     case "${c}" in
       test_fix|product_bug) AUTO_FIX=$((AUTO_FIX + 1)) ;;
       environment)          NEEDS_HUMAN=$((NEEDS_HUMAN + 1)) ;;
       infra_flake)          FLAKE=$((FLAKE + 1)) ;;
+      *)
+        OTHER=$((OTHER + 1))
+        echo "::warning::Unexpected fix_category '$(sanitize_for_gha "${c}")' in breakdown — counted under 'other'"
+        ;;
     esac
   done
 
@@ -315,6 +380,7 @@ if [[ -n "${TRIGGER_ISSUE_NUMBER}" ]]; then
   [[ "${AUTO_FIX}" -gt 0 ]] && append_breakdown "${AUTO_FIX} queued for auto-fix"
   [[ "${NEEDS_HUMAN}" -gt 0 ]] && append_breakdown "${NEEDS_HUMAN} need manual attention"
   [[ "${FLAKE}" -gt 0 ]] && append_breakdown "${FLAKE} transient flake"
+  [[ "${OTHER}" -gt 0 ]] && append_breakdown "${OTHER} uncategorized"
 
   SUMMARY="## E2E Nightly Triage — \`${TARGET_BRANCH}\` (${ISSUE_COUNT} ${CAUSE_WORD})"$'\n\n'
   [[ -n "${BREAKDOWN_STR}" ]] && SUMMARY+="${BREAKDOWN_STR}"$'\n\n'

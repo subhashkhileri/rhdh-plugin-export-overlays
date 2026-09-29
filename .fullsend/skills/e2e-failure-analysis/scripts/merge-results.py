@@ -165,15 +165,18 @@ def validate_against_schema(result_path: str) -> list[str]:
     return [e.message for e in errors]
 
 
-# --- Cross-entry soft backstop ---
-# Grouping is the agent's job now, so there is no hard cross-entry invariant
-# to enforce — schema conformance (validate_against_schema) covers each entry.
-# The one thing a dumb script can still detect is the agent leaving two
-# separate entries with the SAME slug: either it missed a merge (same cause,
-# should be one issue) or its slugs drift (different causes reusing a slug,
-# which breaks cross-run dedup). Both are worth a warning, neither is fatal.
-def backstop_warnings(result: dict[str, Any]) -> list[str]:
-    warnings: list[str] = []
+# --- Cross-entry invariant: slugs must be unique across entries ---
+# Grouping is the agent's job now, so the schema (validate_against_schema)
+# covers each entry on its own. The one cross-entry invariant a dumb script can
+# still enforce is that no two entries share a root_cause_slug: either the agent
+# missed a merge (same cause, should be one issue) or its slugs drift (different
+# causes reusing a slug, which breaks cross-run dedup). This must be FATAL, not a
+# warning — the harness validation loop (validation_loop.max_iterations) re-runs
+# the agent on a non-zero exit but ignores stderr, so only a hard failure gives
+# the agent a second pass to reconcile. A warning would let the last-written
+# file silently win and drop every workspace unique to the overwritten entry.
+def slug_uniqueness_errors(result: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
 
     slugs: dict[str, list[str]] = {}
     for entry in result["issues"]:
@@ -183,14 +186,14 @@ def backstop_warnings(result: dict[str, Any]) -> list[str]:
         slugs.setdefault(slug, []).extend(entry.get("affected_workspaces", []))
     for slug, workspaces in slugs.items():
         if len([e for e in result["issues"] if e.get("root_cause_slug") == slug]) > 1:
-            warnings.append(
+            errors.append(
                 f'slug "{slug}" appears on more than one entry (workspaces: '
-                f'{", ".join(workspaces)}). If these share a cause, group them into '
-                f"one issue; if they don't, give them distinct slugs so cross-run "
+                f'{", ".join(workspaces)}). If these share a cause, merge them into '
+                f"one entry; if they don't, give them distinct slugs so cross-run "
                 f"dedup stays reliable."
             )
 
-    return warnings
+    return errors
 
 
 def main() -> None:
@@ -214,7 +217,7 @@ def main() -> None:
     if not target_branch or not output_path or not input_dir:
         sys.stderr.write(
             "Usage: merge-results.py --target-branch <branch> --output <path> "
-            "<workspace-results-dir>\n"
+            "<results-dir>\n"
         )
         sys.exit(1)
 
@@ -243,9 +246,14 @@ def main() -> None:
         "summary": summary,
     }
 
-    # Soft backstop — warn but never fail the run on grouping/slug hygiene.
-    for w in backstop_warnings(result):
-        sys.stderr.write(f"WARNING: {w}\n")
+    # Fatal: two entries must never share a slug (missed merge / slug drift).
+    # Fail before writing so the validation loop re-runs the agent to reconcile.
+    slug_errors = slug_uniqueness_errors(result)
+    if slug_errors:
+        sys.stderr.write("Duplicate root_cause_slug across entries:\n")
+        for e in slug_errors:
+            sys.stderr.write(f"  - {e}\n")
+        sys.exit(1)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as f:

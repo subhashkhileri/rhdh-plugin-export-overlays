@@ -195,7 +195,17 @@ but the underlying mechanisms differ, keep them separate *and* give them
 distinct slugs — a shared slug across genuinely different causes breaks
 cross-run dedup.
 
-Carry one `fix_category` and one `root_cause_slug` per cause.
+Carry one `fix_category` and one `root_cause_slug` per cause. **If the grouped
+members were classified differently, pick the most actionable category by this
+precedence:** `test_fix` > `product_bug` > `environment` > `infra_flake`. A real
+fix should still be filed rather than the cause being written off as a flake.
+(If the categories differ *a lot*, that is a hint the mechanisms differ and you
+may have over-grouped — reconsider the split.)
+
+**Slug uniqueness is enforced.** Two entries must never carry the same
+`root_cause_slug` — the merge script fails hard on a collision. If you find
+yourself wanting the same slug on two causes, either they are one cause (merge
+them) or they are distinct (give them distinct slugs).
 
 ---
 
@@ -221,16 +231,23 @@ it.
 ```bash
 REPO="redhat-developer/rhdh-plugin-export-overlays"
 SLUG="<root_cause_slug>"
+AFFECTED=(<workspace-1> <workspace-2> ...)   # this cause's affected_workspaces
 
 # Net 1: by cause anchor
 BY_SLUG=$(gh api -X GET search/issues \
   -f q="repo:${REPO} is:issue state:open \"fullsend-tracking: root-cause=${SLUG}\" \"fullsend-tracking: branch=${TARGET_BRANCH}\" in:body" \
   --jq '[.items[].number]')
 
-# Net 2: by each affected workspace (run per member workspace)
-BY_WS=$(gh api -X GET search/issues \
-  -f q="repo:${REPO} is:issue state:open \"fullsend-tracking: workspace=${WORKSPACE}\" \"fullsend-tracking: branch=${TARGET_BRANCH}\" in:body" \
-  --jq '[.items[].number]')
+# Net 2: by each affected workspace — one search per member, then union
+BY_WS="[]"
+for WORKSPACE in "${AFFECTED[@]}"; do
+  HITS=$(gh api -X GET search/issues \
+    -f q="repo:${REPO} is:issue state:open \"fullsend-tracking: workspace=${WORKSPACE}\" \"fullsend-tracking: branch=${TARGET_BRANCH}\" in:body" \
+    --jq '[.items[].number]')
+  BY_WS=$(jq -cn --argjson a "$BY_WS" --argjson b "$HITS" '$a + $b | unique')
+done
+
+CANDIDATES=$(jq -cn --argjson a "$BY_SLUG" --argjson b "$BY_WS" '$a + $b | unique')
 ```
 
 ### Stage 2 — Verify each candidate (never trust the raw search hit)
@@ -240,14 +257,28 @@ containing only `workspace=backstage`. **Confirm every candidate before acting
 on it:**
 
 1. **Exact-line check (deterministic).** Fetch the candidate body and require
-   the *literal* tracking line — not GitHub's fuzzy match:
+   the *literal* tracking line — not GitHub's fuzzy match. Accept on the branch
+   line **plus** either this cause's slug **or** *any one* of its affected
+   workspaces, so loop the workspace check over the whole set (not a single
+   variable — the surviving failing workspace may be one added after the issue
+   was created):
 
    ```bash
-   BODY=$(gh api "repos/${REPO}/issues/${N}" --jq '.body')
-   echo "${BODY}" | grep -Fq "fullsend-tracking: branch=${TARGET_BRANCH}" || continue
-   # accept if it carries this cause's slug OR any of this cause's workspaces
-   echo "${BODY}" | grep -Fq "fullsend-tracking: root-cause=${SLUG}" \
-     || echo "${BODY}" | grep -Fq "fullsend-tracking: workspace=${WORKSPACE}" || continue
+   for N in $(echo "${CANDIDATES}" | jq -r '.[]'); do
+     BODY=$(gh api "repos/${REPO}/issues/${N}" --jq '.body')
+     echo "${BODY}" | grep -Fq "fullsend-tracking: branch=${TARGET_BRANCH}" || continue
+
+     MATCH=""
+     echo "${BODY}" | grep -Fq "fullsend-tracking: root-cause=${SLUG}" && MATCH=1
+     if [[ -z "${MATCH}" ]]; then
+       for WORKSPACE in "${AFFECTED[@]}"; do
+         echo "${BODY}" | grep -Fq "fullsend-tracking: workspace=${WORKSPACE}" && { MATCH=1; break; }
+       done
+     fi
+     [[ -z "${MATCH}" ]] && continue
+
+     # ... Stage 2 step 2 (semantic check) + linked-PR check below, per candidate
+   done
    ```
 
 2. **Semantic check (judgment).** Read the candidate's Root Cause section and
@@ -270,13 +301,22 @@ HAS_OPEN_PR=$(echo "${LINKED_PRS}" | jq 'any(.[]; .state == "open")')
 |-------------------|----------------|--------|
 | 0 | — | `create` |
 | 1 | Yes | `comment` (coder already working) |
-| 1 | No (or closed/merged) | `comment` + `cycle_ready_to_code: true` |
-| >1 | — | `comment` on the **oldest** (+ `cycle_ready_to_code` if it has no open PR); in the body, flag the others (`#N`, `#M`) for manual consolidation |
+| 1 | No (or closed/merged) | `comment` + `cycle_ready_to_code: true` (auto-fixable only — see below) |
+| >1 | — | `comment` on the **oldest** (+ `cycle_ready_to_code` if it has no open PR *and* is auto-fixable); in the body, flag the others (`#N`, `#M`) for manual consolidation |
+
+**Only set `cycle_ready_to_code: true` for `test_fix` and `product_bug`.**
+Cycling the label re-triggers the code agent, which can only help a cause a code
+change can fix. For `environment` (and any umbrella tracking a cluster-wide
+outage), leave it `false` — it needs a human. (The post-script also enforces
+this, but set it correctly here.)
 
 **When commenting, reconcile the affected set** — don't just re-dump analysis.
 Compare tonight's affected workspaces against what the issue currently lists and
 say what changed, e.g. *"still failing: backstage-auth, scorecard; now passing:
-tekton; newly affected: backstage-gitlab-auth."*
+tekton; newly affected: backstage-gitlab-auth."* You do **not** need to rewrite
+the issue's `fullsend-tracking: workspace=` lines yourself — `gh issue edit` is
+disallowed for you, and the post-script syncs those lines to tonight's affected
+set when it posts your comment.
 
 ---
 
@@ -343,6 +383,14 @@ no per-workspace nesting needed.
 
 **Title format:** `[fullsend] E2E: <workspace-or-slug> — <short description>`
 
+- Keep the title **under 256 characters** — the schema rejects the *entire*
+  result if any title exceeds it, so one long title drops every issue in the run.
+- For an **umbrella** (several workspaces), use the **slug**, never a joined
+  workspace list — a 15-name list blows the cap. e.g.
+  `[fullsend] E2E: oci-resolution — plugins fail to pull from ghcr.io`. The full
+  affected list belongs in the body, not the title.
+- For a **single-workspace** cause, the workspace name is fine.
+
 ### Remediation guidelines
 
 - **Always include `Target branch`** so the code agent opens the PR
@@ -374,11 +422,16 @@ mkdir -p "$OUTPUT_DIR/cause-results"
 
 ### Per-cause output
 
-After completing Phases 2–4 for each cause, write its result. Name the file by
-slug so reruns overwrite rather than duplicate:
+After completing Phases 2–4 for each cause, write its result to a **uniquely
+named** file — number them `cause-01.json`, `cause-02.json`, … Do **not** name
+files by slug: if two causes accidentally share a slug, slug-named files would
+overwrite each other and silently drop a whole cause, whereas numbered files
+both survive so the merge script catches the collision and fails (the Phase 5
+`rm -rf` at the start of each run keeps the directory clean, so numbering never
+accumulates stale files across reruns).
 
 ```bash
-cat > "$OUTPUT_DIR/cause-results/<slug>.json" << 'WS_EOF'
+cat > "$OUTPUT_DIR/cause-results/cause-01.json" << 'WS_EOF'
 {
   "affected_workspaces": ["<name-1>", "<name-2>"],
   "fix_category": "<infra_flake|test_fix|product_bug|environment>",
@@ -409,7 +462,10 @@ field or set `action: "skip"`.
 - `root_cause_slug`: short kebab-case slug, stable across runs (e.g., `route-wait`)
 - `issue.action`: `"create"` | `"comment"` | `"skip"` (from Phase 3 dedup)
 - `issue.number`: required for `"comment"` action (integer, not string)
-- `issue.cycle_ready_to_code`: `true` when issue exists but has no open PR
+- `issue.cycle_ready_to_code`: `true` only when the issue has no open PR **and**
+  the cause is `test_fix`/`product_bug` (see Phase 3); `false` otherwise
+- `root_cause_slug`: must be unique across all cause files (merge fails on a
+  collision)
 - Do NOT include extra keys — the schema enforces `additionalProperties: false`
 
 ### Merge and validate
@@ -425,9 +481,11 @@ python3 "$SKILL_DIR/scripts/merge-results.py" \
   "$OUTPUT_DIR/cause-results"
 ```
 
-A `WARNING: slug ... appears on more than one entry` means you split a cause
-that should be one issue (or reused a slug across different causes) — reconcile
-before finishing. Then run the fullsend validator:
+If the merge **fails** with `Duplicate root_cause_slug across entries`, two of
+your cause files share a slug: either they are the same cause (merge them into
+one file) or genuinely different (give them distinct slugs). Fix the files and
+re-run — the merge will not produce output until slugs are unique. Then run the
+fullsend validator:
 
 ```bash
 fullsend-check-output "$OUTPUT_DIR/agent-result.json"
