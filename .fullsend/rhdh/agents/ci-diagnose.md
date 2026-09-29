@@ -115,8 +115,12 @@ PREV=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/comments" \
     ')
 ```
 
-Reuse prior per-check findings for checks whose classification is unlikely to
-have changed; focus fresh analysis on checks newly red since the last run.
+Treat the previous diagnosis as a **hypothesis, not fact** — it may have
+been produced with incomplete evidence. Always re-verify checks that are
+still red using primary evidence (artifacts, logs). The previous comment is
+useful only for: (a) identifying checks that are *newly* red since the last
+run (prioritize those), and (b) providing cross-run context (e.g. a failure
+that persists across multiple SHAs is less likely to be a flake).
 
 ## Phase 2: Diagnose each red check
 
@@ -149,17 +153,32 @@ directory) before classifying ANY Prow check. If the download fails:
 the literal output. Do not infer "network policy" or "sandbox restriction"
 without evidence — run the command and let it speak for itself.
 
-Then invoke `/e2e-failure-analysis` with the downloaded artifacts — trace
+Then invoke `/e2e-failure-analysis` yourself (the coordinator) — trace
 inspection for UI failures is built into the skill's methodology (tiered:
 quick check first, full timeline when ambiguous). Check cluster logs
 (`pods.txt`, `events.txt`, `backstage-backend.log`) for deployment failures.
 **If the skill fails to invoke, stop and report it** — do not guess a
 classification without it.
 
+**Sub-agents return evidence, not classifications.** When fanning out
+sub-agents for per-workspace analysis, each sub-agent prompt must:
+
+1. Include the **local `$ARTIFACTS` path** (and `$BUILD_LOG`, `$SKILL_DIR`
+   if available) so it reads from disk, not the network.
+2. Instruct the sub-agent to return **per-test evidence** — what failed,
+   the error mechanism, which files/components are involved, and whether
+   the same infrastructure worked for other tests.
+3. **Not** ask the sub-agent for a classification. Classification requires
+   cross-check context (PR diff, other checks' results, cross-workspace
+   patterns) that sub-agents lack. The coordinator classifies after
+   collecting all evidence.
+
+If a sub-agent fails or returns unusable output, analyze that workspace
+inline as a fallback — do not silently drop it.
+
 **Multiple red Prow checks:** Download artifacts for each Prow check
 yourself (sequentially — they share a cache directory), then fan out
-sub-agents for analysis. Each sub-agent prompt must include the **local
-`$ARTIFACTS` path** so it reads files from disk, not from the network.
+sub-agents for per-workspace evidence gathering.
 
 **Multiple check types in parallel.** When both Prow and non-Prow checks
 are red, you may diagnose non-Prow checks (GHA/status) concurrently with
@@ -233,6 +252,18 @@ or a test/config change would prevent the failure, it is `pr_regression` or
 `pre_existing`, not `flake`. Distinguish **symptom** ("timeout") from
 **mechanism** ("the h1 wait raced a background waitForEvent while the OAuth
 refresh 401'd").
+
+**Mixed root causes within a single check.** A Prow check can contain
+dozens of failing tests with different root causes (e.g. 1 `pr_regression`
+among 40 `pre_existing`). Use the most severe classification for the check:
+`pr_regression` > `pre_existing` > `product_bug` > `flake` > `config_env`.
+List all distinct root causes in the `root_cause` field so none are hidden.
+
+**Coordinator cross-check.** Before writing the final classification,
+verify each `pre_existing` or `flake` finding against the PR diff. If the
+PR touches files in the same workspace or area as a failure classified
+`pre_existing` or `flake`, re-examine — the PR may have caused or exposed
+it.
 
 Roll the per-check classifications into one overall `verdict`:
 - all `pr_regression` → `pr_regression`; all `flake` → `flake`; etc.
@@ -435,10 +466,12 @@ classification).
   runs it as part of its methodology; do not classify a UI failure before it returns.
 - **Correlate with the diff.** Never call something `pre_existing` or `flake`
   without checking whether the PR's changes touch the failing area.
-- Treat the previous diagnosis comment as a **hypothesis**, not fact — re-verify
-  checks that are still red.
-- When spawning sub-agents (e.g. per Prow workspace), always pass
-  `model: "opus"`.
+- **Sub-agent type.** When spawning sub-agents (e.g. per Prow workspace
+  or per check), always pass `model: "opus"` and
+  `subagent_type: "ci-diagnose"`. Generic sub-agents lack the full
+  ci-diagnose methodology, skill access (e.g. `/e2e-failure-analysis`),
+  and the constraints in this document — they can improvise around missing
+  data and produce plausible-sounding but incorrect diagnoses.
 - **No diagnosis without primary evidence.** Every check type has a primary
   evidence source — the actual CI output that shows what failed and why:
 
