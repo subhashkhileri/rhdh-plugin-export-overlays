@@ -324,10 +324,12 @@ them gives the PR author false confidence that the problem is being worked.
 CUTOFF=$(date -u -d '15 days ago' '+%Y-%m-%d' 2>/dev/null \
   || date -u -v-15d '+%Y-%m-%d')
 
-# Open issues (not PRs) updated since CUTOFF whose title/body mention the
-# workspace, failing spec, or a distinctive error token.
+# Open tracking issues (label:e2e-failure) updated since CUTOFF whose
+# title/body mention the workspace, failing spec, or a distinctive error
+# token. Use label:e2e-failure to match per-cause tracking issues created
+# by nightly triage — not the umbrella trigger issues (label:e2e-triage).
 ISSUE_CANDIDATES=$(gh api -X GET search/issues \
-  -f q="repo:${REPO} is:issue state:open updated:>=${CUTOFF} ${SEARCH_KEY}" \
+  -f q="repo:${REPO} is:issue state:open label:e2e-failure updated:>=${CUTOFF} ${SEARCH_KEY}" \
   --jq '[.items[] | {number, title, url: .html_url, labels: [.labels[].name]}]')
 ISSUE_FILTERED=$(echo "${ISSUE_CANDIDATES}" | jq '.[:5]')
 ```
