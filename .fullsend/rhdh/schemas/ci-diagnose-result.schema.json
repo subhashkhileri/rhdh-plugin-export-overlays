@@ -146,7 +146,7 @@
               }
             }
           },
-          "description": "Open issues updated within the last 15 days that track the same failure. Typically '[fullsend] E2E:' tracking issues created by nightly triage. Populate for pre_existing and product_bug after searching recent open issues; omit the key when none found (do not emit an empty array)."
+          "description": "Open issues updated within the last 15 days that track the same failure. Typically '[fullsend] E2E:' tracking issues created by nightly triage. Populate for pre_existing after searching recent open issues; omit the key when none found (do not emit an empty array)."
         }
       },
       "allOf": [

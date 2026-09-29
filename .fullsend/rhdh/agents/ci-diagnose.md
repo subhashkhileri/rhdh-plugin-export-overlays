@@ -276,7 +276,7 @@ For each `pre_existing` check, derive a short search key from the evidence
 (workspace directory, failing spec/file, check name, or a distinctive error
 token). Never use the current PR number as a match.
 
-### 3b-i: Search open PRs
+### Search open PRs
 
 Author does not matter (human or bot). Do not require a label or origin
 filter.
@@ -311,7 +311,7 @@ merely mentions "e2e" or "timeout" is not a match.
 it). Omit the key entirely when nothing matched — do not emit `[]`. Cap at
 5.
 
-### 3b-ii: Search open issues (last 15 days only)
+### Search open issues (last 15 days only)
 
 Search for tracking issues that already describe this failure — typically
 `[fullsend] E2E:` issues created by nightly triage. Use the same search
