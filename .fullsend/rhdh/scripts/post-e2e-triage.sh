@@ -8,13 +8,14 @@
 #
 # This script does NOT:
 #   - Push branches or create PRs (code agent handles that)
-#   - Perform dedup logic (the agent handles dedup in Phase 4)
+#   - Perform grouping or dedup (the agent handles both — each result entry
+#     is one already-grouped, already-deduplicated cause)
 #   - Manage JIRA (removed from triage pipeline)
 #
 # Steps:
 #   1. Locate and validate agent-result.json
 #   2. Scan result file for secrets (gitleaks)
-#   3. For each workspace: execute issue directive (create/comment/skip)
+#   3. For each cause: execute issue directive (create/comment/skip)
 #   4. Handle cycle_ready_to_code label re-triggering
 #   5. Comment on trigger issue with summary table
 #
@@ -145,15 +146,15 @@ if ! jq empty "${RESULT_FILE}" 2>/dev/null; then
   exit 1
 fi
 
-WORKSPACE_COUNT="$(jq '.workspaces | length' "${RESULT_FILE}")"
+ISSUE_COUNT="$(jq '.issues | length' "${RESULT_FILE}")"
 
-if [[ -z "${WORKSPACE_COUNT}" || "${WORKSPACE_COUNT}" -lt 1 ]]; then
-  echo "::error::agent-result.json has no workspaces entries"
+if [[ -z "${ISSUE_COUNT}" || "${ISSUE_COUNT}" -lt 1 ]]; then
+  echo "::error::agent-result.json has no issues entries"
   exit 1
 fi
 
 echo "Target branch: $(jq -r '.target_branch // "main"' "${RESULT_FILE}")"
-echo "Workspaces to process: ${WORKSPACE_COUNT}"
+echo "Causes to process: ${ISSUE_COUNT}"
 
 # ---------------------------------------------------------------------------
 # 2. Scan agent-result.json for secrets
@@ -177,16 +178,21 @@ echo "Result file scan passed"
 # 3. Execute issue directives per workspace
 # ---------------------------------------------------------------------------
 declare -a SUMMARY_LINES=()
+declare -a CATEGORIES=()
 
-for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
-  WS_JSON="$(jq -c ".workspaces[$i]" "${RESULT_FILE}")"
+for i in $(seq 0 $((ISSUE_COUNT - 1))); do
+  WS_JSON="$(jq -c ".issues[$i]" "${RESULT_FILE}")"
 
-  IFS=$'\t' read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION ROOT_SLUG < <(
-    echo "${WS_JSON}" | jq -r '[.workspace, .fix_category, (.tests|length), (.issue.action // "skip"), .root_cause_slug] | @tsv'
+  # Root cause for the summary table — collapse to a single line and trim.
+  ROOT_CAUSE="$(echo "${WS_JSON}" | jq -r '.root_cause // ""' \
+    | tr '\n' ' ' | sed 's/  */ /g; s/^ //; s/ $//' | cut -c1-200)"
+
+  IFS=$'\t' read -r WS_NAME FIX_CAT TEST_COUNT ISSUE_ACTION < <(
+    echo "${WS_JSON}" | jq -r '[(.affected_workspaces | join(", ")), .fix_category, (.tests|length), (.issue.action // "skip")] | @tsv'
   )
 
   echo ""
-  echo "--- Workspace: ${WS_NAME} (${FIX_CAT}) ---"
+  echo "--- Cause: ${WS_NAME} (${FIX_CAT}) ---"
 
   ISSUE_REF=""
 
@@ -272,7 +278,10 @@ for i in $(seq 0 $((WORKSPACE_COUNT - 1))); do
       ;;
   esac
 
-  SUMMARY_LINES+=("| ${WS_NAME} | \`${FIX_CAT}\` | ${ROOT_SLUG} | ${TEST_COUNT} | ${ISSUE_REF:-—} |")
+  # Escape pipes so root-cause prose can't break the markdown table.
+  ROOT_CAUSE_CELL="${ROOT_CAUSE//|/\\|}"
+  SUMMARY_LINES+=("| ${WS_NAME} | \`${FIX_CAT}\` | ${TEST_COUNT} | ${ISSUE_REF:-—} | ${ROOT_CAUSE_CELL:-—} |")
+  CATEGORIES+=("${FIX_CAT}")
   echo "  [${WS_NAME}] ${FIX_CAT} — ${TEST_COUNT} test(s) — ${ISSUE_ACTION}"
 done
 
@@ -283,17 +292,37 @@ if [[ -n "${TRIGGER_ISSUE_NUMBER}" ]]; then
   echo ""
   echo "Posting summary to trigger issue #${TRIGGER_ISSUE_NUMBER}..."
 
-  SUMMARY="## Triage Summary"$'\n\n'
-  SUMMARY+="| Workspace | Category | Root Cause | Tests | Issue |"$'\n'
-  SUMMARY+="|-----------|----------|------------|-------|-------|"$'\n'
+  TARGET_BRANCH="$(jq -r '.target_branch // "main"' "${RESULT_FILE}")"
+
+  # Category breakdown for the headline. test_fix + product_bug are handed to
+  # the code agent automatically; environment needs a human; infra_flake is
+  # transient (no issue).
+  AUTO_FIX=0; NEEDS_HUMAN=0; FLAKE=0
+  for c in "${CATEGORIES[@]:-}"; do
+    case "${c}" in
+      test_fix|product_bug) AUTO_FIX=$((AUTO_FIX + 1)) ;;
+      environment)          NEEDS_HUMAN=$((NEEDS_HUMAN + 1)) ;;
+      infra_flake)          FLAKE=$((FLAKE + 1)) ;;
+    esac
+  done
+
+  CAUSE_WORD="causes"; [[ "${ISSUE_COUNT}" -eq 1 ]] && CAUSE_WORD="cause"
+  BREAKDOWN_STR=""
+  append_breakdown() {
+    [[ -n "${BREAKDOWN_STR}" ]] && BREAKDOWN_STR+=" · "
+    BREAKDOWN_STR+="$1"
+  }
+  [[ "${AUTO_FIX}" -gt 0 ]] && append_breakdown "${AUTO_FIX} queued for auto-fix"
+  [[ "${NEEDS_HUMAN}" -gt 0 ]] && append_breakdown "${NEEDS_HUMAN} need manual attention"
+  [[ "${FLAKE}" -gt 0 ]] && append_breakdown "${FLAKE} transient flake"
+
+  SUMMARY="## E2E Nightly Triage — \`${TARGET_BRANCH}\` (${ISSUE_COUNT} ${CAUSE_WORD})"$'\n\n'
+  [[ -n "${BREAKDOWN_STR}" ]] && SUMMARY+="${BREAKDOWN_STR}"$'\n\n'
+  SUMMARY+="| Workspaces | Category | Tests | Issue | Root cause |"$'\n'
+  SUMMARY+="|------------|----------|-------|-------|------------|"$'\n'
   for line in "${SUMMARY_LINES[@]}"; do
     SUMMARY+="${line}"$'\n'
   done
-
-  AGENT_SUMMARY="$(jq -r '.summary // empty' "${RESULT_FILE}")"
-  if [[ -n "${AGENT_SUMMARY}" ]]; then
-    SUMMARY+=$'\n'"### Analysis"$'\n\n'"${AGENT_SUMMARY}"
-  fi
 
   printf '%s' "${SUMMARY}" | gh issue comment "${TRIGGER_ISSUE_NUMBER}" \
     --repo "${REPO_FULL_NAME}" \
@@ -302,6 +331,6 @@ fi
 
 echo ""
 echo "=== E2E Triage Results ==="
-echo "Workspaces: ${WORKSPACE_COUNT}"
+echo "Causes: ${ISSUE_COUNT}"
 echo ""
 echo "Post-e2e-triage complete."
