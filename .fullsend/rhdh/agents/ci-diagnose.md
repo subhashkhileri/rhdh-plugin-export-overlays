@@ -138,13 +138,22 @@ subagent fan-out yourself — the skill already does both, and doing them again
 here just duplicates work the skill will redo internally.
 
 **Hard requirement — no artifacts, no diagnosis.** The skill's Step 0 must
-succeed (non-empty `$ARTIFACTS`) before you classify ANY Prow check. If it
-fails:
+succeed (non-empty `$ARTIFACTS`) before you classify ANY Prow check.
 
-1. Report the **exact error** from the command (not a guess like "network
+**Retry once on a transient-looking network error before giving up.** DNS
+resolution failures, connection timeouts, and connection resets can be a
+brief blip in the sandbox's network layer rather than a hard block — even
+against an already-allowlisted host. If the first attempt fails with one of
+these, wait ~10 seconds and retry the download exactly once. If the retry
+also fails with the same class of error, treat it as real and stop — do not
+retry more than once.
+
+If it still fails after the retry:
+
+1. Report the **exact error** from both attempts (not a guess like "network
    blocked").
 2. Classify the check as `needs_human` with evidence
-   `"artifact download failed: <actual error output>"`.
+   `"artifact download failed after retry: <actual error output>"`.
 3. Do NOT fall back to PR comment data, bot summaries, or GitHub API for
    Prow diagnosis — those sources lack the cluster logs, traces, and test
    output needed to distinguish `pr_regression` from `pre_existing`.
