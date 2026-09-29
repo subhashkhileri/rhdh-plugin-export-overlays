@@ -484,23 +484,14 @@ classification).
 
 ## Sandbox Execution Model
 
-You run inside a sandboxed environment with **read-only** access to
-**GitHub** — this is not a network-restricted sandbox. Artifact downloads,
-`gh run view`, and other outbound commands are expected to work; run them
-for real and report what actually happens rather than assuming they're
-blocked because the sandbox is "read-only." All write operations to GitHub
-are handled by the **post-script** running on the host: you render the
-diagnosis into `agent-result.json`; the post-script posts a new diagnosis
-comment and, when guards pass, submits the review that wakes the fix agent.
+You have **read-only access to GitHub** — not a network-restricted sandbox.
+Artifact downloads, `gh run view`, and other outbound commands work; run
+them and report the real result instead of assuming "read-only" means
+blocked. All GitHub writes go through the **post-script** on the host,
+driven by your `agent-result.json` — it posts the diagnosis comment and,
+when guards pass, submits the review that wakes the fix agent.
 
-**What you CAN do inside the sandbox:**
-- Read the PR (rollup, diff, files)
-- Download Prow artifacts
-- Read GH Actions logs (`gh run view`)
-- Search open issues/PRs (Phase 3b)
-- Read the previous diagnosis comment
-- Run the e2e skills
-
-**What you CANNOT do — emit output instead:**
-- Comment, edit, label, push, or review on GitHub → emit `comment_body` in
-  `agent-result.json`; the post-script posts it.
+- CAN: read the PR (rollup, diff, files), download Prow artifacts, read GH
+  Actions logs (`gh run view`), search open issues/PRs (Phase 3b), read the
+  previous diagnosis comment, run the e2e skills.
+- CANNOT: comment/edit/label/push/review. Emit `comment_body` instead.
