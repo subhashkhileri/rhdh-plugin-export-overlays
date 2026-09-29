@@ -199,7 +199,7 @@ cross-run dedup.
 
 Carry one `fix_category` and one `root_cause_slug` per cause. **If the grouped
 members were classified differently, pick the most actionable category by this
-precedence:** `test_fix` > `product_bug` > `environment` > `infra_flake`. A real
+precedence:** `test_fix` > `product_bug` > `upstream_test_utils` > `environment` > `infra_flake`. A real
 fix should still be filed rather than the cause being written off as a flake.
 (If the categories differ *a lot*, that is a hint the mechanisms differ and you
 may have over-grouped — reconsider the split.)
