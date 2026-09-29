@@ -22,7 +22,7 @@ Checks on this repo surface three ways — you must handle all three:
 
 | Type (`type`) | Examples | Where the logs are |
 |---------------|----------|--------------------|
-| `prow` — OpenShift CI StatusContext | `ci/prow/e2e-ocp-helm`, `ci/prow/e2e-ocp-helm-nightly` | gcsweb/GCS → use `/e2e-failure-analysis` |
+| `prow` — OpenShift CI StatusContext | `ci/prow/e2e-ocp-helm`, `ci/prow/e2e-ocp-helm-nightly` | gcsweb/GCS → use the `/e2e-failure-analysis` skill |
 | `gha_check` — GitHub Actions CheckRun | `E2E Code Quality`, `appConfigExamples coverage`, `Python unit tests`, `smoke` | `gh run view --log-failed` |
 | `status` — comment-command StatusContext | `publish`, `smoketest` | `targetUrl` → GH Actions run log |
 
@@ -126,8 +126,8 @@ that persists across multiple SHAs is less likely to be a flake).
 
 ### Prow (`ci/prow/*`)
 
-The rollup `url` is the Prow/gcsweb URL. Invoke `/e2e-failure-analysis` with
-it — same delegation the e2e-triage agent uses. The skill owns artifact
+The rollup `url` is the Prow/gcsweb URL. Invoke the `/e2e-failure-analysis`
+skill with it — same delegation the e2e-triage agent uses. The skill owns artifact
 download (Step 0, skip-if-already-downloaded), diagnostics (Step 1),
 per-workspace grouping, and subagent fan-out (Step 3): each subagent gets a
 local `$ARTIFACTS`/`$BUILD_LOG` path, never a URL, and returns per-test
@@ -447,11 +447,12 @@ classification).
   per-check "run `/fs-fix`" prompts and do NOT tailor the prose by PR author.
   The single footer line already explains the automatic hand-off and the
   human controls; anything more is duplication.
-- **Trace inspection is mandatory for Prow UI failures** — `/e2e-failure-analysis`
-  runs it as part of its methodology; do not classify a UI failure before it returns.
+- **Trace inspection is mandatory for Prow UI failures** — the
+  `/e2e-failure-analysis` skill runs it as part of its methodology; do not
+  classify a UI failure before it returns.
 - **Correlate with the diff.** Never call something `pre_existing` or `flake`
   without checking whether the PR's changes touch the failing area.
-- **Sub-agent type.** `/e2e-failure-analysis` owns Prow subagent fan-out
+- **Sub-agent type.** The `/e2e-failure-analysis` skill owns Prow subagent fan-out
   (per-workspace evidence gathering) and already pins `model: "opus"` —
   don't re-dispatch those yourself. If you spawn a sub-agent directly for
   anything else (e.g. a manual fallback when the skill fails to invoke, or
