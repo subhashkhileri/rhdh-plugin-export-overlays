@@ -25,6 +25,7 @@
 #   3. Resolve the PR number (from the result, falling back to GITHUB_ISSUE_URL)
 #   4. If the PR advanced past the analyzed head_sha while the agent ran,
 #      swap in a stale notice instead of the (now outdated) diagnosis
+#  4b. Append footer to non-stale diagnoses
 #   5. Post a new diagnosis comment
 #   6. Maybe request-changes so the fix agent picks up pr_regression findings
 #
@@ -405,11 +406,11 @@ fi
 # one place and the agent can focus on diagnosis content.
 if [[ "${STALE}" != "true" ]]; then
   CI_DIAGNOSE_FOOTER='<sub>Automated CI diagnosis · runs once after all checks settle. For PRs opened by the code agent, `pr_regression` failures are handed to the fix agent automatically (up to 2 attempts). `pre_existing` failures are linked to an open PR or tracking issue when one already exists. The fix agent only runs on PRs branched from this repo, not forks. Take over with `/fs-fix` [this diagnosis]({{COMMENT_LINK}}) or `/fs-fix <instructions>`, stop with `/fs-fix-stop`.</sub>'
-  # Insert footer before the state marker (last line).
-  state_marker="$(tail -1 "${BODY_FILE}")"
-  sed -i.bak '$ d' "${BODY_FILE}"
+  # Insert footer before the state marker.
+  state_marker="$(grep '<!-- ci-diagnose-state:' "${BODY_FILE}")"
+  sed '/<!-- ci-diagnose-state:/d' "${BODY_FILE}" > "${BODY_FILE}.tmp"
+  mv "${BODY_FILE}.tmp" "${BODY_FILE}"
   printf '%s\n%s\n' "${CI_DIAGNOSE_FOOTER}" "${state_marker}" >> "${BODY_FILE}"
-  rm -f "${BODY_FILE}.bak"
 fi
 
 # ---------------------------------------------------------------------------

@@ -516,8 +516,8 @@ classification).
   findings — that is the built-in bot→fix on-ramp; you do not signal it with
   a comment marker. Keep the human-visible prose diagnostic: do NOT add
   per-check "run `/fs-fix`" prompts and do NOT tailor the prose by PR author.
-  The single footer line already explains the automatic hand-off and the
-  human controls; anything more is duplication.
+  The post-script appends a footer that explains the automatic hand-off
+  and the human controls; do not duplicate it in the diagnosis body.
 - **Trace inspection is mandatory for Prow UI failures** — the
   `/e2e-failure-analysis` skill runs it as part of its methodology; do not
   classify a UI failure before it returns.
