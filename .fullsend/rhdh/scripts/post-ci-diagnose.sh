@@ -399,6 +399,20 @@ if [[ -n "${RECORDED_HEAD}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 4b. Append footer to non-stale diagnoses
+# ---------------------------------------------------------------------------
+# The footer is appended here rather than in the agent prompt so it stays in
+# one place and the agent can focus on diagnosis content.
+if [[ "${STALE}" != "true" ]]; then
+  CI_DIAGNOSE_FOOTER='<sub>Automated CI diagnosis · runs once after all checks settle. For PRs opened by the code agent, `pr_regression` failures are handed to the fix agent automatically (up to 2 attempts). `pre_existing` failures are linked to an open PR or tracking issue when one already exists. The fix agent only runs on PRs branched from this repo, not forks. Take over with `/fs-fix` [this diagnosis]({{COMMENT_LINK}}) or `/fs-fix <instructions>`, stop with `/fs-fix-stop`.</sub>'
+  # Insert footer before the state marker (last line).
+  state_marker="$(tail -1 "${BODY_FILE}")"
+  sed -i.bak '$ d' "${BODY_FILE}"
+  printf '%s\n%s\n' "${CI_DIAGNOSE_FOOTER}" "${state_marker}" >> "${BODY_FILE}"
+  rm -f "${BODY_FILE}.bak"
+fi
+
+# ---------------------------------------------------------------------------
 # 5. Post a new diagnosis comment
 # ---------------------------------------------------------------------------
 # Always create a new comment. The hidden marker remains only as a state
