@@ -384,7 +384,7 @@ request-changes. `pre_existing` is reported with any `related_prs` instead
 </details>
 
 ---
-<sub>Automated CI diagnosis · updates as checks complete · not a substitute for review. For bot-authored PRs, `pr_regression` failures are handed to the fix agent automatically (up to 2 attempts). `pre_existing` failures are linked to an open PR or tracking issue when one already exists. A maintainer can take over any time with `/fs-fix <instruction>`, or stop auto-fix with `/fs-fix-stop` — see the [fix agent docs](https://github.com/fullsend-ai/fullsend/blob/main/docs/agents/fix.md).</sub>
+<sub>Automated CI diagnosis · runs once after all checks settle. For PRs opened by the code agent, `pr_regression` failures are handed to the fix agent automatically (up to 2 attempts). `pre_existing` failures are linked to an open PR or tracking issue when one already exists. The fix agent only runs on PRs branched from this repo, not forks. Take over with `/fs-fix` [this diagnosis]({{COMMENT_LINK}}) or `/fs-fix <instructions>`, stop with `/fs-fix-stop`.</sub>
 <!-- ci-diagnose-state: {"sha":"<HEAD_SHA>","red":["appConfigExamples coverage","ci/prow/e2e-ocp-helm"]} -->
 ```
 
