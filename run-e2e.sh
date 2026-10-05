@@ -43,13 +43,12 @@ cd "$SCRIPT_DIR"
 # These use defaults that can be overridden via environment variables.
 
 # RHDH deployment
-# NOTE: upstream main uses RHDH_VERSION="2.1-106-CI" for the Helm path, but the
-# operator install (install-rhdh-catalog-source.sh) maps this to a release-X.Y
-# branch that doesn't exist and 404s. Pin to "next" while this script forces the
-# operator; revert to the upstream value once the operator catalog source exists.
-export RHDH_VERSION="next"             # RHDH version to deploy (e.g., "1.10", "next")
-# TODO: revert to "${INSTALLATION_METHOD:-helm}" once operator subscription support is validated in CI
-export INSTALLATION_METHOD="operator" # "helm" or "operator"
+# Both honor the environment so CI can select the install method/version per job
+# (the e2e CI step exports INSTALLATION_METHOD and RHDH_VERSION). The operator
+# install (install-rhdh-catalog-source.sh) maps a pinned RHDH_VERSION to a
+# release-X.Y branch that doesn't exist and 404s, so "next" is the working default.
+export RHDH_VERSION="${RHDH_VERSION:-next}"                   # RHDH version to deploy (e.g., "1.10", "next")
+export INSTALLATION_METHOD="${INSTALLATION_METHOD:-helm}"     # "helm" or "operator"
 
 # Playwright
 export CI="${CI:-true}"                                  # Enables CI mode (forbidOnly, teardown)
