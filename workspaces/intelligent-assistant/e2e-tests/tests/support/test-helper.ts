@@ -109,13 +109,20 @@ async function patchOpenAiAllowedModels(rhdh: RHDHDeployment): Promise<void> {
   const tmp = path.join(os.tmpdir(), `${ns}-lightspeed-stack.yaml`);
   fs.writeFileSync(tmp, yaml.dump(config));
   await rhdh.k8sClient.createOrUpdateConfigMap(cm, ns, tmp, dataKey);
-  await $`oc rollout restart deployment/redhat-developer-hub -n ${ns}`;
+  const isOperator = rhdh.deploymentConfig.method === "operator";
+  const resource = isOperator
+    ? "statefulset/backstage-developer-hub"
+    : "deployment/redhat-developer-hub";
+  const podSelector = isOperator
+    ? "rhdh.redhat.com/app=backstage-developer-hub"
+    : "app.kubernetes.io/component=backstage";
+  await $`oc rollout restart ${resource} -n ${ns}`;
   // waitUntilReady() is true while old+new hub pods are both Ready (plus Postgres),
   // which races Keycloak sessions across pods (in-memory session store). Gate on
   // rollout completion and Ready backstage pods before login/tests.
   // lightspeed-core EmptyDir vector stores are also orphaned by a mid-suite swap.
-  await $`oc rollout status deployment/redhat-developer-hub -n ${ns} --timeout=300s`;
-  await $`oc wait --for=condition=Ready pod -l app.kubernetes.io/component=backstage -n ${ns} --timeout=300s`;
+  await $`oc rollout status ${resource} -n ${ns} --timeout=300s`;
+  await $`oc wait --for=condition=Ready pod -l ${podSelector} -n ${ns} --timeout=300s`;
   await rhdh.waitUntilReady();
 }
 
@@ -266,12 +273,14 @@ export async function ensureLightspeedDeployment(
   await test.runOnce(`intelligent-assistant-deploy-${ns}`, async () => {
     await rhdh.configure(lightspeedDeployConfig());
 
-    // e2e-test-utils scaleDownAndRestart breaks on helm upgrade (label selector + bash).
-    try {
-      await $`oc get deployment redhat-developer-hub -n ${ns}`;
-      await $`oc delete deployment redhat-developer-hub -n ${ns} --wait=true`;
-    } catch {
-      /* fresh install */
+    if (rhdh.deploymentConfig.method === "helm") {
+      // e2e-test-utils scaleDownAndRestart breaks on helm upgrade (label selector + bash).
+      try {
+        await $`oc get deployment redhat-developer-hub -n ${ns}`;
+        await $`oc delete deployment redhat-developer-hub -n ${ns} --wait=true`;
+      } catch {
+        /* fresh install */
+      }
     }
 
     // A transient lightspeed-core ErrImagePull fails the whole serial file.
