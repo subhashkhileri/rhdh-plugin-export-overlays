@@ -43,9 +43,9 @@ cd "$SCRIPT_DIR"
 # These use defaults that can be overridden via environment variables.
 
 # RHDH deployment
-# Honor environment overrides for both CI and local runs.
 export INSTALLATION_METHOD="${INSTALLATION_METHOD:-helm}" # "helm" or "operator"
-export RHDH_VERSION="${RHDH_VERSION:-next}"
+# Temporarily force next while the OpenShift CI step pins RHDH to 1.11.
+export RHDH_VERSION="next"
 
 # Playwright
 export CI="${CI:-true}"                                  # Enables CI mode (forbidOnly, teardown)
