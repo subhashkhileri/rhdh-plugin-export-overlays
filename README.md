@@ -183,9 +183,8 @@ This creates `backstage.json` with the target version and updates all metadata O
 
 ## Local E2E release branch
 
-The runner defaults to Helm with `RHDH_VERSION=2.2`. Selecting
-`INSTALLATION_METHOD=operator` defaults the version to `next`. An explicit
-`RHDH_VERSION` overrides either default.
+The runner defaults to Helm with `RHDH_VERSION=next`. Set `INSTALLATION_METHOD`
+or `RHDH_VERSION` explicitly to override these defaults.
 
 `run-e2e.sh` defaults `RELEASE_BRANCH_NAME` to `main` for local runs, including
 nightly runs with `CI=false`. Set it explicitly to test another release branch.

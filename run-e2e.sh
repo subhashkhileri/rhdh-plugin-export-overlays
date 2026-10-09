@@ -43,15 +43,9 @@ cd "$SCRIPT_DIR"
 # These use defaults that can be overridden via environment variables.
 
 # RHDH deployment
-# Both honor the environment so CI can select the install method/version per job.
-# Helm defaults to a published release line. Operator installations use the
-# main-branch "next" bundle.
+# Honor environment overrides for both CI and local runs.
 export INSTALLATION_METHOD="${INSTALLATION_METHOD:-helm}" # "helm" or "operator"
-RHDH_VERSION_DEFAULT="2.2"
-if [[ "$INSTALLATION_METHOD" == "operator" ]]; then
-    RHDH_VERSION_DEFAULT="next"
-fi
-export RHDH_VERSION="${RHDH_VERSION:-$RHDH_VERSION_DEFAULT}"
+export RHDH_VERSION="${RHDH_VERSION:-next}"
 
 # Playwright
 export CI="${CI:-true}"                                  # Enables CI mode (forbidOnly, teardown)
