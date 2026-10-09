@@ -183,6 +183,10 @@ This creates `backstage.json` with the target version and updates all metadata O
 
 ## Local E2E release branch
 
+The runner defaults to Helm with `RHDH_VERSION=2.2`. Selecting
+`INSTALLATION_METHOD=operator` defaults the version to `next`. An explicit
+`RHDH_VERSION` overrides either default.
+
 `run-e2e.sh` defaults `RELEASE_BRANCH_NAME` to `main` for local runs, including
 nightly runs with `CI=false`. Set it explicitly to test another release branch.
 OpenShift CI runs identified by `JOB_NAME` or `PROW_JOB_ID` use the branch supplied

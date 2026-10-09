@@ -8,4 +8,5 @@ spec:
       secrets:
         - name: rhdh-secrets
           containers:
+            - backstage-backend
             - lightspeed-core

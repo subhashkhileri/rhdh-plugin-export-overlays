@@ -4,5 +4,5 @@ metadata:
   name: developer-hub
 spec:
   flavours:
-    - name: lightspeed
+    - name: intelligent-assistant
       enabled: false

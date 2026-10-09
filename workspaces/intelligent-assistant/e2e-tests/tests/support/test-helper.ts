@@ -57,10 +57,14 @@ type LightspeedStackConfig = {
  * RHDH chart 2.1+ (intelligentAssistant) creates
  * `{release}-ia-stack` with data key `lightspeed-stack.yaml`.
  * Older chart 2.0 used `{release}-lightspeed-config` / `config.yaml`.
+ * The operator mounts that key from its generated files ConfigMap.
  */
 async function patchOpenAiAllowedModels(rhdh: RHDHDeployment): Promise<void> {
   const ns = rhdh.deploymentConfig.namespace;
-  const cm = "redhat-developer-hub-ia-stack";
+  const isOperator = rhdh.deploymentConfig.method === "operator";
+  const cm = isOperator
+    ? "backstage-files-developer-hub-lightspeed-stack-config"
+    : "redhat-developer-hub-ia-stack";
   const dataKey = "lightspeed-stack.yaml";
   const models = yaml.load(
     fs.readFileSync("tests/config/openai-allowed-models.yaml", "utf8"),
@@ -109,9 +113,8 @@ async function patchOpenAiAllowedModels(rhdh: RHDHDeployment): Promise<void> {
   const tmp = path.join(os.tmpdir(), `${ns}-lightspeed-stack.yaml`);
   fs.writeFileSync(tmp, yaml.dump(config));
   await rhdh.k8sClient.createOrUpdateConfigMap(cm, ns, tmp, dataKey);
-  const isOperator = rhdh.deploymentConfig.method === "operator";
   const resource = isOperator
-    ? "statefulset/backstage-developer-hub"
+    ? "deployment/backstage-developer-hub"
     : "deployment/redhat-developer-hub";
   const podSelector = isOperator
     ? "rhdh.redhat.com/app=backstage-developer-hub"
@@ -272,6 +275,10 @@ export async function ensureLightspeedDeployment(
   const ns = rhdh.deploymentConfig.namespace;
   await test.runOnce(`intelligent-assistant-deploy-${ns}`, async () => {
     await rhdh.configure(lightspeedDeployConfig());
+    const resource =
+      rhdh.deploymentConfig.method === "operator"
+        ? "deployment/backstage-developer-hub"
+        : "deployment/redhat-developer-hub";
 
     if (rhdh.deploymentConfig.method === "helm") {
       // e2e-test-utils scaleDownAndRestart breaks on helm upgrade (label selector + bash).
@@ -292,7 +299,7 @@ export async function ensureLightspeedDeployment(
         `RHDH deploy failed (${error instanceof Error ? error.message : String(error)}); retrying once`,
       );
       try {
-        await $`oc delete deployment redhat-developer-hub -n ${ns} --wait=true`;
+        await $`oc delete ${resource} -n ${ns} --wait=true`;
       } catch {
         /* deployment may already be gone */
       }
