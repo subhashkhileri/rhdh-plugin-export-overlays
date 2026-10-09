@@ -61,6 +61,13 @@ export SKIP_KEYCLOAK_DEPLOYMENT="${SKIP_KEYCLOAK_DEPLOYMENT:-}" # Set "true" to 
 export JOB_NAME="${JOB_NAME:-}"                          # If contains "periodic-", skips metadata injection
 export GIT_PR_NUMBER="${GIT_PR_NUMBER:-}"                 # PR number for OCI URL generation
 
+# CI is also enabled for local runs, so use Prow job metadata to distinguish
+# OpenShift CI. Keep its supplied release branch; default only local runs.
+# Update this default to release-X.Y when cutting a release branch.
+if [[ -z "$JOB_NAME" && -z "${PROW_JOB_ID:-}" ]]; then
+    export RELEASE_BRANCH_NAME="${RELEASE_BRANCH_NAME:-main}"
+fi
+
 # Catalog index image — only set if you need to override the default baked into the RHDH chart
 export CATALOG_INDEX_IMAGE="${CATALOG_INDEX_IMAGE:-}"
 
