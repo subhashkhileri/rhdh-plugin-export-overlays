@@ -43,9 +43,8 @@ cd "$SCRIPT_DIR"
 # These use defaults that can be overridden via environment variables.
 
 # RHDH deployment
-export INSTALLATION_METHOD="operator" # "helm" or "operator"
-# Temporarily force next while the OpenShift CI step pins RHDH to 1.11.
-export RHDH_VERSION="next"
+export INSTALLATION_METHOD="${INSTALLATION_METHOD:-helm}" # "helm" or "operator"
+export RHDH_VERSION="${RHDH_VERSION:-next}"
 
 # Playwright
 export CI="${CI:-true}"                                  # Enables CI mode (forbidOnly, teardown)
@@ -64,9 +63,6 @@ export GIT_PR_NUMBER="${GIT_PR_NUMBER:-}"                 # PR number for OCI UR
 if [[ -z "$JOB_NAME" && -z "${PROW_JOB_ID:-}" ]]; then
     export RELEASE_BRANCH_NAME="${RELEASE_BRANCH_NAME:-main}"
 fi
-
-# Temporarily pin the newer catalog for operator CI validation (2.2-19).
-export CATALOG_INDEX_IMAGE="quay.io/rhdh/plugin-catalog-index@sha256:ab4517da6c0fc3eb8aa5eab3b89cc096aeb3724958360338b9cd59f3955eaf18"
 
 # Nightly mode
 E2E_NIGHTLY_MODE="${E2E_NIGHTLY_MODE:-false}"
@@ -90,8 +86,7 @@ E2E_TEST_UTILS_PATH="${E2E_TEST_UTILS_PATH:-}"
 # Pin specific e2e-test-utils version.
 E2E_TEST_UTILS_VERSION="${E2E_TEST_UTILS_VERSION:-}"
 # Git ref for e2e-test-utils: "owner/repo#branch" — clones and sets E2E_TEST_UTILS_PATH
-# Temporarily test the unpublished fixes in e2e-test-utils PR #186.
-E2E_TEST_UTILS_GIT_REF="${E2E_TEST_UTILS_GIT_REF:-subhashkhileri/rhdh-e2e-test-utils#codex/disable-ia-operator-default}"
+E2E_TEST_UTILS_GIT_REF="${E2E_TEST_UTILS_GIT_REF:-}"
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 
