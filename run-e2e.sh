@@ -90,7 +90,8 @@ E2E_TEST_UTILS_PATH="${E2E_TEST_UTILS_PATH:-}"
 # Pin specific e2e-test-utils version.
 E2E_TEST_UTILS_VERSION="${E2E_TEST_UTILS_VERSION:-}"
 # Git ref for e2e-test-utils: "owner/repo#branch" — clones and sets E2E_TEST_UTILS_PATH
-E2E_TEST_UTILS_GIT_REF="${E2E_TEST_UTILS_GIT_REF:-}"
+# Temporarily test the unpublished fixes in e2e-test-utils PR #186.
+E2E_TEST_UTILS_GIT_REF="${E2E_TEST_UTILS_GIT_REF:-subhashkhileri/rhdh-e2e-test-utils#codex/disable-ia-operator-default}"
 
 # ── Parse arguments ───────────────────────────────────────────────────────────
 
