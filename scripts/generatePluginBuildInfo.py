@@ -675,11 +675,14 @@ def rhdh_git_branch_for_midstream(midstream_branch: str) -> str:
     """Map a midstream catalog branch to the matching ``redhat-developer/rhdh`` git branch.
 
     - ``main`` (next) → ``main``
+    - ``release-2.1`` → ``release-2.1`` (catalog release branches share the rhdh name)
     - ``rhdh-1.10-rhel-9`` → ``release-1.10``
     """
     branch = (midstream_branch or "").strip()
     if branch in (DEFAULT_MIDSTREAM_BRANCH, ""):
         return DEFAULT_MIDSTREAM_BRANCH
+    if re.fullmatch(r"release-[0-9]+(?:\.[0-9]+)+", branch):
+        return branch
     match = re.fullmatch(r"rhdh-([0-9]+(?:\.[0-9]+)+)-rhel-9", branch)
     if match:
         return f"release-{match.group(1)}"
@@ -769,7 +772,8 @@ def print_fallback_rebuild_cta(
 
     package_filter = "|".join(containers)
     # Prefer -v x.y.z --next on the next stream (matches updatePLRs.sh /
-    # RELEASE_GUIDE). Release branches use plain -v x.y.z from rhdh package.json.
+    # RELEASE_GUIDE). Catalog release branches (release-x.y, or older
+    # rhdh-1.y-rhel-9) use plain -v x.y.z from that release's rhdh package.json.
     # (-v main also works once package.json major matches the next stream.)
     rhdh_branch = rhdh_git_branch_for_midstream(current_midstream_branch())
     version = fetch_rhdh_package_version(rhdh_branch) or "<version>"
