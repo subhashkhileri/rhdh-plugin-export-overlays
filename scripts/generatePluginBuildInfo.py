@@ -768,7 +768,7 @@ def print_fallback_rebuild_cta(
         return
 
     package_filter = "|".join(containers)
-    # Prefer -v x.y.z --next on the next stream (matches generatePipelineRunsForPlugins.sh /
+    # Prefer -v x.y.z --next on the next stream (matches updatePLRs.sh /
     # RELEASE_GUIDE). Release branches use plain -v x.y.z from rhdh package.json.
     # (-v main also works once package.json major matches the next stream.)
     rhdh_branch = rhdh_git_branch_for_midstream(current_midstream_branch())
@@ -794,7 +794,7 @@ def print_fallback_rebuild_cta(
 
     print(
         f"\n\n{Colors.YELLOW}{step}) Update Konflux PLRs, then run rebuilds:{Colors.NORM}\n"
-        f"   .tekton/generatePipelineRunsForPlugins.sh --trigger "
+        f"   .tekton/updatePLRs.sh --trigger "
         f"-p '{package_filter}' {version_args}"
     )
     step += 1
