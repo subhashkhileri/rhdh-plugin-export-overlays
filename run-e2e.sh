@@ -43,7 +43,7 @@ cd "$SCRIPT_DIR"
 # These use defaults that can be overridden via environment variables.
 
 # RHDH deployment
-export INSTALLATION_METHOD="${INSTALLATION_METHOD:-helm}" # "helm" or "operator"
+export INSTALLATION_METHOD="operator" # "helm" or "operator"
 # Temporarily force next while the OpenShift CI step pins RHDH to 1.11.
 export RHDH_VERSION="next"
 
