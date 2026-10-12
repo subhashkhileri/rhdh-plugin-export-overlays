@@ -3,9 +3,6 @@ kind: Backstage
 metadata:
   name: developer-hub
 spec:
-  flavours:
-    - name: intelligent-assistant
-      enabled: false
   application:
     extraFiles:
       mountPath: /opt/app-root/src/rbac
