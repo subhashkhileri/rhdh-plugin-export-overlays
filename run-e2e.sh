@@ -64,6 +64,9 @@ if [[ -z "$JOB_NAME" && -z "${PROW_JOB_ID:-}" ]]; then
     export RELEASE_BRANCH_NAME="${RELEASE_BRANCH_NAME:-main}"
 fi
 
+# Temporarily pin the newer catalog for operator CI validation (2.2-19).
+export CATALOG_INDEX_IMAGE="quay.io/rhdh/plugin-catalog-index@sha256:ab4517da6c0fc3eb8aa5eab3b89cc096aeb3724958360338b9cd59f3955eaf18"
+
 # Nightly mode
 E2E_NIGHTLY_MODE="${E2E_NIGHTLY_MODE:-false}"
 
