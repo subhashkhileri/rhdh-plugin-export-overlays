@@ -520,7 +520,7 @@ Operator jobs are enabled in OpenShift CI on `main` and `release-2.1`. Diagnose 
 
 ### Failure Analysis
 
-A Claude Code skill is available at `.claude/skills/` (also `.agents/skills/`; both link to `.fullsend/skills/e2e-failure-analysis`) for investigating E2E failures:
+A Claude Code skill is available at `.claude/skills/` for investigating E2E failures:
 
 - **`e2e-failure-analysis`** — structured workflow: artifact download, diagnostics, grouping by error signature, trace correlation (including the Playwright trace CLI), cluster log search, and config comparison. Its architecture reference covers Helm and operator configuration differences.
 
