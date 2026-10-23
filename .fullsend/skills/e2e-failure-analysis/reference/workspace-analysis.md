@@ -349,10 +349,14 @@ contains a `Backstage` CR, not the OLM Subscription that installs the operator.
 Shared application settings belong in `app-config-rhdh.yaml`.
 
 For operator setup failures, check the build log for catalog/Subscription/CSV
-installation errors before inspecting Backstage conditions and generated resources.
-Verify flavour names, workload kind/name, ConfigMap names, and container targets
-against the operator version used by the run. Config arrays are replaced during
-test-utils merging, so secret overrides must retain every required container target.
+installation errors first. In the build log, the `Backstage CR` box contains only
+the applied CR spec — e2e-test-utils does not capture the CR's status or
+conditions, and it does not collect operator-namespace logs. Use the project
+namespace diagnostics instead: `events.txt`, `describe-deployments.txt`,
+`pods.txt`, and pod logs. Verify flavour names, workload kind/name, ConfigMap
+names, and container targets against the operator version used by the run.
+Config arrays are replaced during test-utils merging, so secret overrides must
+retain every required container target.
 
 Identify the owner before suggesting a fix: workspace CR/config errors belong here;
 shared deployment logic belongs in test-utils; operator or installer defects belong

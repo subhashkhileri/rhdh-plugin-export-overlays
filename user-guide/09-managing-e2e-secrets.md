@@ -28,7 +28,7 @@ From the repository root:
 
 Use `-w` to select which workspace secrets are loaded. Without `-w`, the runner selects all workspaces with E2E tests. Playwright options such as `--project` filter tests but do not narrow the secret selection.
 
-Secret loading is the same for Helm and operator runs. Set `INSTALLATION_METHOD=operator` to select the operator; see [local E2E runs](../README.md#local-e2e-runs) for defaults and an example.
+Secret loading is the same for Helm and operator runs. Set `INSTALLATION_METHOD=operator` to select the operator; see [local E2E runs](https://github.com/redhat-developer/rhdh-plugin-export-overlays/blob/main/README.md#local-e2e-runs) for defaults and an example.
 
 For a single workspace with its dependencies installed:
 

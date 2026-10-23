@@ -54,25 +54,40 @@ echo "Triggered by issue: ${ISSUE_URL}"
 The Prow job name encodes the branch. Extract it:
 
 ```bash
-# Job name format: periodic-ci-{org}-{repo}-{branch}-{job-suffix}
-JOB_NAME=$(echo "$PROW_URL" | grep -oP '(?<=logs/)[^/]+')
+# Job name formats:
+#   periodic-ci-{org}-{repo}-{branch}-{job-suffix}
+#   pull-ci-{org}-{repo}-{branch}-{job-suffix}
+# Strip the GCS prefix first. Do not grep for "logs/" — it also matches
+# "pr-logs/", which is why presubmit URLs used to yield the job name "pull".
+JOB_NAME=$(echo "$PROW_URL" \
+  | sed -E 's#.*/pr-logs/pull/[^/]+/[^/]+/##; s#.*/logs/##' \
+  | cut -d/ -f1)
 TARGET_BRANCH=$(echo "$JOB_NAME" \
-  | sed 's/^periodic-ci-redhat-developer-rhdh-plugin-export-overlays-//' \
-  | sed -E 's/-e2e-ocp-(helm|operator).*//')
+  | sed -E 's/^(periodic|pull)-ci-redhat-developer-rhdh-plugin-export-overlays-//' \
+  | sed -E 's/-e2e-ocp-(helm|operator).*$//')
+if [[ -z "${TARGET_BRANCH}" || "${TARGET_BRANCH}" == "${JOB_NAME}" ]]; then
+  echo "ERROR: Could not derive a branch from job ${JOB_NAME}" >&2
+  exit 1
+fi
 echo "Target branch: $TARGET_BRANCH"
 ```
 
-Verify the branch exists:
+Verify the branch exists. If it does not, fail loudly: falling back to `main`
+would file the issue (and any code-agent PR) against the wrong branch.
 
 ```bash
-if ! git rev-parse --verify "$TARGET_BRANCH" >/dev/null 2>&1; then
+branch_exists() {
+  git rev-parse --verify "refs/heads/${TARGET_BRANCH}" >/dev/null 2>&1 \
+    || git rev-parse --verify "refs/remotes/origin/${TARGET_BRANCH}" >/dev/null 2>&1
+}
+if ! branch_exists; then
   git fetch origin "$TARGET_BRANCH" 2>/dev/null || true
 fi
-if git rev-parse --verify "$TARGET_BRANCH" >/dev/null 2>&1; then
+if branch_exists; then
   echo "Branch $TARGET_BRANCH: ok"
 else
-  echo "WARNING: Branch $TARGET_BRANCH not found — falling back to main"
-  TARGET_BRANCH="main"
+  echo "ERROR: Branch $TARGET_BRANCH not found — refusing to fall back to main" >&2
+  exit 1
 fi
 ```
 
@@ -139,7 +154,8 @@ errors from operator/installer defects.
 - If the test assertion is wrong or outdated → `test_fix`
 - If the test config is missing/wrong (paths, secrets, plugins) → `test_fix`
 - If the test setup script has a bug (missing wait, race condition) → `test_fix`
-- If the plugin itself is broken (API changed, component missing) → `product_bug`
+- If a plugin, the operator, or the installer is broken (API changed,
+  component missing, reconciliation defect) → `product_bug`
 - If the bug is in a shared helper/fixture/page object from `@red-hat-developer-hub/e2e-test-utils` (e.g. `UIhelper`, `LoginHelper`, `RHDHDeployment`, page objects, `runOnce`) → `upstream_test_utils`
 - If pods crashed with OOM/ImagePull/network errors → `infra_flake`
 - If secret values or CI variables are missing → `environment`
@@ -405,10 +421,22 @@ no per-workspace nesting needed.
   "fix the timeout", write:
   "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts` line 42,
   increase the route wait timeout from 30s to 60s."
-- **For `product_bug`** — do not fix the test. Remediation should instruct
-  adding `test.skip`:
+- **For `product_bug`** — do not fix the test. Add a skip scoped to the lane
+  where the bug occurs. The OpenShift CI step sets `E2E_NIGHTLY_MODE=true` for
+  **both** Helm and operator nightlies, so a bare nightly skip also hides the
+  test from the other lane:
 
-      test.skip(!!process.env.E2E_NIGHTLY_MODE, "<root cause summary>");
+  - Operator-only defect:
+    `test.skip(process.env.INSTALLATION_METHOD === "operator", "<root cause summary>");`
+  - Helm-only defect:
+    `test.skip(process.env.INSTALLATION_METHOD !== "operator", "<root cause summary>");`
+  - Affects both lanes:
+    `test.skip(!!process.env.E2E_NIGHTLY_MODE, "<root cause summary>");`
+
+  The runner also derives a `@skip-<job-suffix>` tag from `JOB_NAME`
+  (`@skip-ocp-operator-nightly` for the operator nightly,
+  `@skip-ocp-operator` for operator PR checks). Prefer the `INSTALLATION_METHOD`
+  form unless the workspace already uses skip tags.
 
 - **For `upstream_test_utils`** — the fix belongs in
   [rhdh-e2e-test-utils](https://github.com/redhat-developer/rhdh-e2e-test-utils),

@@ -27,6 +27,10 @@ interface ParsedURL {
   gcs: string;
 }
 
+function jobSubdir(job: string): string | null {
+  return job.match(/-(e2e-ocp-(?:helm|operator)(?:-[a-z0-9-]+)?)$/)?.[1] ?? null;
+}
+
 function parseUrl(url: string): ParsedURL | null {
   const p = new URL(url.replace(/\/$/, "")).pathname
     .replace(/^\/view\/gs\//, "")
@@ -36,7 +40,7 @@ function parseUrl(url: string): ParsedURL | null {
   if (parts.includes("pr-logs")) {
     const i = parts.indexOf("pull") + 1;
     const [pr, job, jid] = [parts[i + 1], parts[i + 2], parts[i + 3]];
-    const sub = job.match(/-(e2e-ocp-(?:helm|operator)(?:-[a-z0-9-]+)?)$/)?.[1];
+    const sub = jobSubdir(job);
     if (!sub) return null;
     return {
       type: "pr", pr, job_id: jid, subdir: sub,
@@ -47,7 +51,7 @@ function parseUrl(url: string): ParsedURL | null {
   if (parts.includes("logs")) {
     const i = parts.indexOf("logs");
     const [job, jid] = [parts[i + 1], parts[i + 2]];
-    const sub = job.match(/-(e2e-ocp-(?:helm|operator)(?:-[a-z0-9-]+)?)$/)?.[1];
+    const sub = jobSubdir(job);
     if (!sub) return null;
     return {
       type: "nightly", job_id: jid, subdir: sub,
@@ -71,6 +75,26 @@ async function gcsList(prefix: string): Promise<GCSItem[]> {
     pageToken = data.nextPageToken;
   } while (pageToken);
   return items;
+}
+
+async function gcsDirs(prefix: string): Promise<string[]> {
+  const dirs: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({
+      prefix,
+      delimiter: "/",
+      maxResults: "1000",
+      fields: "prefixes,nextPageToken",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await fetch(`${API_URL}?${params}`);
+    if (!res.ok) throw new Error(`GCS list failed: ${res.status} ${res.statusText}`);
+    const data = await res.json();
+    if (data.prefixes) dirs.push(...data.prefixes);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return dirs;
 }
 
 async function downloadFile(item: GCSItem, prefixLen: number, dest: string): Promise<void> {
@@ -138,13 +162,11 @@ async function main(): Promise<void> {
   const cacheDir = path.join(base, info.pr || "nightly", info.job_id);
   const stepPrefix = `${info.gcs}/artifacts/${info.subdir}/`;
 
-  process.stderr.write("Listing objects...\n");
-  const stepItems = await gcsList(stepPrefix);
-  const steps = [...new Set(
-    stepItems.map((item) => item.name.slice(stepPrefix.length).split("/")[0]),
-  )];
+  process.stderr.write("Discovering E2E step...\n");
+  const stepDirs = await gcsDirs(stepPrefix);
+  const steps = stepDirs.map((dir) => dir.slice(stepPrefix.length).replace(/\/$/, ""));
   const candidates = steps.filter((step) =>
-    /^redhat-developer-rhdh-plugin-export-overlays-ocp-(helm|operator)$/.test(step),
+    /^redhat-developer-rhdh-plugin-export-overlays-ocp-(?:helm|operator|e2e)$/.test(step),
   );
   if (candidates.length !== 1) {
     throw new Error(`Expected one E2E step under ${stepPrefix}, found: ${candidates.join(", ") || "none"}`);
@@ -152,7 +174,9 @@ async function main(): Promise<void> {
   const container = candidates[0];
   const artifactsDir = path.join(cacheDir, container, "artifacts");
   const gcsSrc = stepPrefix + container;
-  const allItems = stepItems.filter((item) => item.name.startsWith(gcsSrc + "/"));
+
+  process.stderr.write("Listing objects...\n");
+  const allItems = await gcsList(gcsSrc + "/");
 
   await fs.rm(cacheDir, { recursive: true, force: true });
 
