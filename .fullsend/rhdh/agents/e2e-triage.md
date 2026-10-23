@@ -147,15 +147,14 @@ workspace, assign a `fix_category`:
 | `environment` | CI env problem (expired creds, missing secrets, quota) |
 | `upstream_test_utils` | Bug in `@red-hat-developer-hub/e2e-test-utils` (fixtures, helpers, deployment logic, page objects) — fix belongs in [rhdh-e2e-test-utils](https://github.com/redhat-developer/rhdh-e2e-test-utils), not this repo |
 
-Use the skill's installation-method guidance to distinguish workspace config
-errors from operator/installer defects.
-
 **Decision guide:**
 - If the test assertion is wrong or outdated → `test_fix`
 - If the test config is missing/wrong (paths, secrets, plugins) → `test_fix`
 - If the test setup script has a bug (missing wait, race condition) → `test_fix`
 - If a plugin, the operator, or the installer is broken (API changed,
-  component missing, reconciliation defect) → `product_bug`
+  component missing, reconciliation defect) → `product_bug`. Use the skill's
+  installation-method guidance to separate workspace config errors from
+  operator/installer defects.
 - If the bug is in a shared helper/fixture/page object from `@red-hat-developer-hub/e2e-test-utils` (e.g. `UIhelper`, `LoginHelper`, `RHDHDeployment`, page objects, `runOnce`) → `upstream_test_utils`
 - If pods crashed with OOM/ImagePull/network errors → `infra_flake`
 - If secret values or CI variables are missing → `environment`
@@ -421,22 +420,16 @@ no per-workspace nesting needed.
   "fix the timeout", write:
   "In `workspaces/argocd/e2e-tests/tests/specs/argocd.spec.ts` line 42,
   increase the route wait timeout from 30s to 60s."
-- **For `product_bug`** — do not fix the test. Add a skip scoped to the lane
-  where the bug occurs. The OpenShift CI step sets `E2E_NIGHTLY_MODE=true` for
-  **both** Helm and operator nightlies, so a bare nightly skip also hides the
-  test from the other lane:
+- **For `product_bug`** — do not fix the test. Prescribe the lane-scoped skip
+  documented in `AGENTS.md` under "Skipping tests (product_bug classification)":
+  gate on `INSTALLATION_METHOD` for an operator-only or Helm-only defect, and
+  use the nightly-wide skip only when both lanes are affected. Never prescribe a
+  bare `E2E_NIGHTLY_MODE` skip for a lane-specific bug — the CI step sets that
+  variable for both nightlies.
 
-  - Operator-only defect:
-    `test.skip(process.env.INSTALLATION_METHOD === "operator", "<root cause summary>");`
-  - Helm-only defect:
-    `test.skip(process.env.INSTALLATION_METHOD !== "operator", "<root cause summary>");`
-  - Affects both lanes:
-    `test.skip(!!process.env.E2E_NIGHTLY_MODE, "<root cause summary>");`
-
-  The runner also derives a `@skip-<job-suffix>` tag from `JOB_NAME`
-  (`@skip-ocp-operator-nightly` for the operator nightly,
-  `@skip-ocp-operator` for operator PR checks). Prefer the `INSTALLATION_METHOD`
-  form unless the workspace already uses skip tags.
+  The runner also supports `@skip-<job-suffix>` tags (`JOB_NAME` →
+  `@skip-ocp-operator-nightly`); prefer the `INSTALLATION_METHOD` form unless
+  the workspace already uses tags.
 
 - **For `upstream_test_utils`** — the fix belongs in
   [rhdh-e2e-test-utils](https://github.com/redhat-developer/rhdh-e2e-test-utils),

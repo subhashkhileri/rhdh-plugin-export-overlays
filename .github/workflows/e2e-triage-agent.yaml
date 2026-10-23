@@ -49,7 +49,8 @@ jobs:
       fail-fast: false
       matrix:
         branch: ${{ github.event_name == 'schedule' && fromJSON('["main","release-1.10","release-2.1"]') || fromJSON(format('["{0}"]', inputs.branch || 'main')) }}
-        lane: [helm, operator]
+        # A supplied Prow URL already identifies one run, so don't fan out over lanes.
+        lane: ${{ (github.event_name == 'workflow_dispatch' && inputs.prow_url != '') && fromJSON('["manual"]') || fromJSON('["helm","operator"]') }}
     steps:
       - name: Discover latest failed nightly
         id: discover
@@ -128,8 +129,7 @@ jobs:
       # create-github-app-token resolves the installation from this repo;
       # RHDH_GH_APP_INSTALLATION_ID is not an input to this action.
       - name: Generate GitHub App token
-        # A manually supplied Prow URL already identifies one run; file it once.
-        if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') != 'true' && (github.event_name != 'workflow_dispatch' || inputs.prow_url == '' || matrix.lane == 'helm')
+        if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') != 'true'
         id: generate-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -138,7 +138,7 @@ jobs:
           permission-issues: write
 
       - name: Create issue and trigger agent
-        if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') != 'true' && (github.event_name != 'workflow_dispatch' || inputs.prow_url == '' || matrix.lane == 'helm')
+        if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') != 'true'
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
           PROW_URL: ${{ steps.discover.outputs.prow_url }}
@@ -197,7 +197,7 @@ jobs:
           gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "e2e-triage"
 
       - name: Dry run summary
-        if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') == 'true' && (github.event_name != 'workflow_dispatch' || inputs.prow_url == '' || matrix.lane == 'helm')
+        if: steps.discover.outputs.should_file == 'true' && (inputs.dry_run || 'false') == 'true'
         env:
           PROW_URL: ${{ steps.discover.outputs.prow_url }}
         run: echo "Dry run — would create issue for ${PROW_URL}"

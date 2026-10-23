@@ -196,8 +196,7 @@ CI=false INSTALLATION_METHOD=operator E2E_NIGHTLY_MODE=true \
 `run-e2e.sh` defaults `RELEASE_BRANCH_NAME` to `main` for local runs, including
 nightly runs with `CI=false`. Set it explicitly to test another release branch,
 together with the matching `RHDH_VERSION` (for example
-`RELEASE_BRANCH_NAME=release-2.1 RHDH_VERSION=2.1`); `RHDH_VERSION` otherwise
-stays `next`.
+`RELEASE_BRANCH_NAME=release-2.1 RHDH_VERSION=2.1`).
 OpenShift CI runs identified by `JOB_NAME` or `PROW_JOB_ID` use the branch supplied
 by the job; the existing nightly branch check still applies there. When cutting a
 release branch, update the local default in `run-e2e.sh` to that release branch.

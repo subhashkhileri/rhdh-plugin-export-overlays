@@ -19,6 +19,12 @@ interface GCSItem {
   size?: string;
 }
 
+interface GCSListResponse {
+  items?: GCSItem[];
+  prefixes?: string[];
+  nextPageToken?: string;
+}
+
 interface ParsedURL {
   type: string;
   pr?: string;
@@ -62,39 +68,35 @@ function parseUrl(url: string): ParsedURL | null {
   return null;
 }
 
-async function gcsList(prefix: string): Promise<GCSItem[]> {
-  const items: GCSItem[] = [];
+async function gcsListAll<T>(
+  prefix: string,
+  params: Record<string, string>,
+  collect: (data: GCSListResponse) => T[],
+): Promise<T[]> {
+  const results: T[] = [];
   let pageToken: string | undefined;
   do {
-    const params = new URLSearchParams({ prefix, maxResults: "1000" });
-    if (pageToken) params.set("pageToken", pageToken);
-    const res = await fetch(`${API_URL}?${params}`);
+    const query = new URLSearchParams({ prefix, maxResults: "1000", ...params });
+    if (pageToken) query.set("pageToken", pageToken);
+    const res = await fetch(`${API_URL}?${query}`);
     if (!res.ok) throw new Error(`GCS list failed: ${res.status} ${res.statusText}`);
-    const data = await res.json();
-    if (data.items) items.push(...data.items);
+    const data: GCSListResponse = await res.json();
+    results.push(...collect(data));
     pageToken = data.nextPageToken;
   } while (pageToken);
-  return items;
+  return results;
 }
 
-async function gcsDirs(prefix: string): Promise<string[]> {
-  const dirs: string[] = [];
-  let pageToken: string | undefined;
-  do {
-    const params = new URLSearchParams({
-      prefix,
-      delimiter: "/",
-      maxResults: "1000",
-      fields: "prefixes,nextPageToken",
-    });
-    if (pageToken) params.set("pageToken", pageToken);
-    const res = await fetch(`${API_URL}?${params}`);
-    if (!res.ok) throw new Error(`GCS list failed: ${res.status} ${res.statusText}`);
-    const data = await res.json();
-    if (data.prefixes) dirs.push(...data.prefixes);
-    pageToken = data.nextPageToken;
-  } while (pageToken);
-  return dirs;
+function gcsList(prefix: string): Promise<GCSItem[]> {
+  return gcsListAll(prefix, {}, (data) => data.items ?? []);
+}
+
+function gcsDirs(prefix: string): Promise<string[]> {
+  return gcsListAll(
+    prefix,
+    { delimiter: "/", fields: "prefixes,nextPageToken" },
+    (data) => data.prefixes ?? [],
+  );
 }
 
 async function downloadFile(item: GCSItem, prefixLen: number, dest: string): Promise<void> {

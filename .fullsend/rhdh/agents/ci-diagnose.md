@@ -226,8 +226,8 @@ gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only
 **`product_bug` vs `pre_existing`:** these overlap whenever a failure would
 reproduce on `main` too. Tie-break on *where the fix belongs*, not on
 whether it would also fail on `main`: `product_bug` if the root cause is in
-upstream plugin/image source, or in the operator/installer outside this repo
-(would be fixed by a change outside this repo);
+upstream plugin/image source or the operator/installer (the fix belongs outside
+this repo);
 `pre_existing` if it's this repo's own CI/config/test code that's broken
 (would be fixed by a change inside this repo, just not by this PR). Both
 still mean "not this PR's fault."
