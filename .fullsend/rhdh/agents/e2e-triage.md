@@ -229,12 +229,12 @@ them) or they are distinct (give them distinct slugs).
 
 ---
 
-## Phase 3: Dedup — Search for Existing Issues
+## Phase 3: Dedup — Search for Existing Issues and Open PRs
 
 Dedup is the same judgment as grouping, across time: **does this cause already
-have an open issue from a previous night?** An issue tracks a *cause on a
-branch* — the set of affected workspaces may differ run to run, so match on the
-cause, not on an exact workspace set.
+have an open issue or an open fix from a previous night?** An issue tracks a
+*cause on a branch* — the set of affected workspaces may differ run to run, so
+match on the cause, not on an exact workspace set.
 
 Do this **per cause** (from Phase 2b).
 
@@ -243,10 +243,10 @@ Issues carry visible **tracking lines** that GitHub search finds via `in:body`:
 
 ### Stage 1 — Search to narrow (over-collect on purpose)
 
-Cast two nets, both scoped to the branch. Union the results into a candidate
-set. The workspace net is what survives slug drift — if the existing issue was
-filed under a slightly different slug, its workspace tracking line still finds
-it.
+Cast two issue nets scoped to the branch, union them, then cast a third net for
+open PRs. The workspace net is what survives slug drift — if the existing issue
+was filed under a slightly different slug, its workspace tracking line still
+finds it.
 
 ```bash
 REPO="redhat-developer/rhdh-plugin-export-overlays"
@@ -269,6 +269,12 @@ done
 
 CANDIDATES=$(jq -cn --argjson a "$BY_SLUG" --argjson b "$BY_WS" '$a + $b | unique')
 ```
+
+**Net 3 — open PRs.** A human PR may fix the cause with no issue link, so list
+open PRs targeting `TARGET_BRANCH` (once per run) and keep those whose changed
+files fall under `workspaces/<affected-workspace>/e2e-tests/`. A path match is
+not a fix: read the title, body, and diff, and keep only PRs addressing the
+same mechanism. Drafts still count.
 
 ### Stage 2 — Verify each candidate (never trust the raw search hit)
 
@@ -306,8 +312,8 @@ on it:**
    that only passed via the workspace net but describes a different failure is
    **not** a match — treat existing issues as hypotheses, not facts.
 
-For each confirmed match, check for an OPEN linked PR (open/closed/merged are
-all `linked:pr`, so inspect state):
+For each confirmed issue match, check for an OPEN linked PR (open/closed/merged
+are all `linked:pr`, so inspect state):
 
 ```bash
 LINKED_PRS=$(gh api "repos/${REPO}/issues/${N}/timeline" \
@@ -317,12 +323,17 @@ HAS_OPEN_PR=$(echo "${LINKED_PRS}" | jq 'any(.[]; .state == "open")')
 
 ### Decision matrix (per cause)
 
-| Confirmed matches | Open linked PR | Action |
-|-------------------|----------------|--------|
-| 0 | — | `create` |
+| Confirmed issue matches | Open PR (linked or confirmed) | Action |
+|-------------------------|------------------------------|--------|
+| 0 | Yes | `create` **without** `ready-to-code`; add `## Related Work` naming the PR(s) |
+| 0 | No | `create` |
 | 1 | Yes | `comment` (coder already working) |
 | 1 | No (or closed/merged) | `comment` + `cycle_ready_to_code: true` (auto-fixable only — see below) |
 | >1 | — | `comment` on the **oldest** (+ `cycle_ready_to_code` if it has no open PR *and* is auto-fixable); in the body, flag the others (`#N`, `#M`) for manual consolidation |
+
+**Why drop `ready-to-code`:** the coder's pre-flight check only sees PRs that
+close-reference the new issue, so a pre-existing PR would not stop it. Net 3
+re-runs nightly, so suppression lasts while the PR is open.
 
 **Only set `cycle_ready_to_code: true` for `test_fix` and `product_bug`.**
 Cycling the label re-triggers the code agent, which can only help a cause a code
@@ -336,7 +347,8 @@ say what changed, e.g. *"still failing: backstage-auth, scorecard; now passing:
 tekton; newly affected: backstage-gitlab-auth."* You do **not** need to rewrite
 the issue's `fullsend-tracking: workspace=` lines yourself — `gh issue edit` is
 disallowed for you, and the post-script syncs those lines to tonight's affected
-set when it posts your comment.
+set when it posts your comment. If Net 3 found an unlinked PR, mention it in the
+comment so humans can reconcile.
 
 ---
 
@@ -354,6 +366,9 @@ or several. You author the full body yourself — there is no downstream merging
 | `upstream_test_utils` | `e2e-failure` | No | Create |
 | `environment` | `e2e-failure` | No | Create |
 | `infra_flake` | — | — | None (summary only) |
+
+When Net 3 confirmed an open PR for `test_fix`/`product_bug`, omit
+`ready-to-code` when creating the issue (see Phase 3).
 
 ### Issue body template
 
@@ -392,6 +407,10 @@ affected workspace (and per-workspace remediation *only* where the fix differs).
 
 <the shared fix, written ONCE. Only add a per-workspace note when a workspace
 needs a different change.>
+
+## Related Work
+
+Open PR: #<number> — <title>      ← omit this section when no PR was confirmed
 
 ## Artifacts
 
